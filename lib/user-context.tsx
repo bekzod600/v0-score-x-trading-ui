@@ -1,7 +1,10 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { mockTraders, mockSignals, type Trader } from "./mock-data"
+import { apiRequest, type ApiError } from "./api-client"
+
+const TOKEN_STORAGE_KEY = "scorex_token"
 
 // Types
 export interface UserProfile {
@@ -41,13 +44,18 @@ interface UserState {
   ratings: UserRating[]
   votes: SignalVote[]
   isLoggedIn: boolean
+  token: string | null
+  isHydrating: boolean
 }
 
 interface UserContextType extends UserState {
   // Auth
-  login: (email: string, password: string) => boolean
-  register: (email: string, password: string, username: string) => boolean
+  login: (email: string, password: string) => Promise<boolean>
+  register: (email: string, password: string, username: string) => Promise<boolean>
   logout: () => void
+  setToken: (token: string | null) => void
+  hydrateAuth: () => Promise<void>
+  requireAuth: (actionName?: string) => boolean
   // Profile
   updateProfile: (updates: Partial<UserProfile>) => void
   // Favorites
@@ -96,48 +104,119 @@ const initialState: UserState = {
   ratings: [],
   votes: [],
   isLoggedIn: false,
+  token: null,
+  isHydrating: true,
+}
+
+interface AuthMeResponse {
+  id?: string
+  username?: string
+  scoreXPoints?: number
+  avatar?: string
+  displayName?: string
+  bio?: string
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UserState>(initialState)
 
-  const login = useCallback((email: string, password: string): boolean => {
-    // Mock login - accept any email/password
-    if (email && password) {
+  const setToken = useCallback((token: string | null) => {
+    setState((prev) => ({ ...prev, token }))
+    if (typeof window !== "undefined") {
+      if (token) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, token)
+      } else {
+        localStorage.removeItem(TOKEN_STORAGE_KEY)
+      }
+    }
+  }, [])
+
+  const hydrateAuth = useCallback(async () => {
+    if (typeof window === "undefined") {
+      setState((prev) => ({ ...prev, isHydrating: false }))
+      return
+    }
+
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+
+    if (!storedToken) {
+      setState((prev) => ({ ...prev, isHydrating: false, isLoggedIn: false, token: null }))
+      return
+    }
+
+    try {
+      const userData = await apiRequest<AuthMeResponse>({
+        method: "GET",
+        path: "/auth/me",
+        token: storedToken,
+        timeoutMs: 5000, // Shorter timeout for auth check
+      })
+
       setState((prev) => ({
         ...prev,
         isLoggedIn: true,
-        favorites: mockSignals.filter((s) => s.isFavorite).map((s) => s.id),
-        subscriptions: [{ traderId: "2", bellSetting: "all" }],
+        token: storedToken,
+        isHydrating: false,
+        profile: {
+          ...prev.profile,
+          ...(userData.id && { id: userData.id }),
+          ...(userData.username && {
+            username: userData.username,
+            displayName: userData.displayName || userData.username,
+          }),
+          ...(userData.scoreXPoints !== undefined && { scoreXPoints: userData.scoreXPoints }),
+          ...(userData.avatar && { avatar: userData.avatar }),
+          ...(userData.bio && { bio: userData.bio }),
+        },
       }))
-      return true
+    } catch (err) {
+      // On any error (network, 401, 403, timeout), clear token and continue as guest
+      const apiErr = err as ApiError
+      console.log("[v0] Auth hydration failed:", apiErr.message)
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+      setState((prev) => ({
+        ...prev,
+        isLoggedIn: false,
+        token: null,
+        isHydrating: false,
+      }))
     }
+  }, [])
+
+  useEffect(() => {
+    hydrateAuth()
+  }, [hydrateAuth])
+
+  const requireAuth = useCallback(
+    (actionName?: string): boolean => {
+      if (state.isLoggedIn) return true
+      // Could trigger a modal here in future
+      console.log(`[v0] Auth required for action: ${actionName || "unknown"}`)
+      return false
+    },
+    [state.isLoggedIn],
+  )
+
+  const login = useCallback(async (_email: string, _password: string): Promise<boolean> => {
+    // Backend uses Telegram auth, not email/password
+    // This will be replaced with real Telegram login in Patch 2
     return false
   }, [])
 
-  const register = useCallback((email: string, password: string, username: string): boolean => {
-    // Mock register - accept any valid input
-    if (email && password && username) {
-      setState((prev) => ({
-        ...prev,
-        isLoggedIn: true,
-        profile: {
-          ...prev.profile,
-          username,
-          displayName: username,
-        },
-        favorites: [],
-        subscriptions: [],
-      }))
-      return true
-    }
+  const register = useCallback(async (_email: string, _password: string, _username: string): Promise<boolean> => {
+    // Backend uses Telegram auth, not email/password registration
     return false
   }, [])
 
   const logout = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+    }
     setState({
       ...initialState,
       isLoggedIn: false,
+      token: null,
+      isHydrating: false,
     })
   }, [])
 
@@ -284,6 +363,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        setToken,
+        hydrateAuth,
+        requireAuth,
         updateProfile,
         toggleFavorite,
         isFavorite,

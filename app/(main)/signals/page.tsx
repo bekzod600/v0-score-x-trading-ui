@@ -1,87 +1,168 @@
 "use client"
 
-import { useState, useMemo, Suspense } from "react"
+import { useState, useMemo, useEffect, Suspense, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { Filter, TrendingUp } from "lucide-react"
+import { Filter, TrendingUp, RefreshCw, Save, Bookmark } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { SignalCard } from "@/components/signals/signal-card"
 import { SignalTabs } from "@/components/signals/signal-tabs"
 import { SignalFilters, ActiveFilterChips } from "@/components/signals/signal-filters"
 import { EmptyState } from "@/components/ui/empty-state"
 import { SkeletonCard } from "@/components/ui/skeleton-card"
 import { useI18n } from "@/lib/i18n-context"
-import {
-  mockSignals,
-  type FilterState,
-  type SignalStatus,
-  defaultFilters,
-  calculatePotentialProfit,
-  calculatePotentialLoss,
-  calculateRiskRatio,
-} from "@/lib/mock-data"
+import { useUser } from "@/lib/user-context"
+import { listSignals, type ApiSignal } from "@/lib/services/signals-service"
+import { listFilters, createFilter, type SavedFilter } from "@/lib/services/filters-service"
+import { type FilterState, type SignalStatus, defaultFilters } from "@/lib/mock-data"
+
+function calculatePotentialProfitFromApi(signal: ApiSignal): number {
+  if (!signal.entry || !signal.tp2) return 0
+  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
+}
+
+function calculatePotentialLossFromApi(signal: ApiSignal): number {
+  if (!signal.entry || !signal.sl) return 0
+  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
+}
+
+function calculateRiskRatioFromApi(signal: ApiSignal): number {
+  const profit = calculatePotentialProfitFromApi(signal)
+  const loss = calculatePotentialLossFromApi(signal)
+  if (loss === 0) return 0
+  return Number((profit / loss).toFixed(1))
+}
 
 function SignalsContent() {
   const searchParams = useSearchParams()
   const { t } = useI18n()
+  const { isLoggedIn, token } = useUser()
   const tabParam = searchParams.get("tab")
   const activeTab = (tabParam === "results" ? "results" : "live") as "live" | "results"
 
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
-  // Filter signals based on active tab and filters
+  const [signals, setSignals] = useState<ApiSignal[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([])
+  const [savedFiltersLoading, setSavedFiltersLoading] = useState(false)
+  const [saveFilterDialogOpen, setSaveFilterDialogOpen] = useState(false)
+  const [newFilterName, setNewFilterName] = useState("")
+  const [savingFilter, setSavingFilter] = useState(false)
+
+  const fetchSignals = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await listSignals({ tab: activeTab })
+      setSignals(response.signals)
+    } catch (err) {
+      console.error("[v0] Failed to fetch signals:", err)
+      setError("Failed to load signals. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [activeTab])
+
+  const fetchSavedFilters = useCallback(async () => {
+    if (!isLoggedIn || !token) return
+
+    setSavedFiltersLoading(true)
+    try {
+      const response = await listFilters(token)
+      setSavedFilters(response.filters)
+    } catch (err) {
+      console.error("[v0] Failed to fetch saved filters:", err)
+    } finally {
+      setSavedFiltersLoading(false)
+    }
+  }, [isLoggedIn, token])
+
+  useEffect(() => {
+    fetchSignals()
+  }, [fetchSignals])
+
+  useEffect(() => {
+    fetchSavedFilters()
+  }, [fetchSavedFilters])
+
+  const handleSaveFilter = async () => {
+    if (!token || !newFilterName.trim()) return
+
+    setSavingFilter(true)
+    try {
+      const response = await createFilter(
+        { name: newFilterName.trim(), criteria: filters as unknown as Record<string, unknown> },
+        token,
+      )
+      setSavedFilters((prev) => [...prev, response.filter])
+      setNewFilterName("")
+      setSaveFilterDialogOpen(false)
+    } catch (err) {
+      console.error("[v0] Failed to save filter:", err)
+    } finally {
+      setSavingFilter(false)
+    }
+  }
+
+  const handleApplySavedFilter = (savedFilter: SavedFilter) => {
+    setFilters(savedFilter.criteria as unknown as FilterState)
+  }
+
   const filteredSignals = useMemo(() => {
-    // First filter by tab
-    const liveStatuses: SignalStatus[] = ["WAITING_ENTRY", "ACTIVE"]
-    const resultStatuses: SignalStatus[] = ["TP1_HIT", "TP2_HIT", "SL_HIT", "HOLD", "CANCEL"]
-    const tabStatuses = activeTab === "live" ? liveStatuses : resultStatuses
+    let result = [...signals]
 
-    let signals = mockSignals.filter((s) => tabStatuses.includes(s.status))
-
-    // Apply custom status filter if set
     if (filters.statuses.length > 0) {
-      signals = signals.filter((s) => filters.statuses.includes(s.status))
+      result = result.filter((s) => filters.statuses.includes(s.status as SignalStatus))
     }
 
-    // Price type filter
     if (filters.priceType === "free") {
-      signals = signals.filter((s) => s.isFree)
+      result = result.filter((s) => s.isFree)
     } else if (filters.priceType === "paid") {
-      signals = signals.filter((s) => !s.isFree)
+      result = result.filter((s) => !s.isFree)
     } else if (filters.priceType === "discounted") {
-      signals = signals.filter((s) => !s.isFree && s.discountPercent > 0)
+      result = result.filter((s) => !s.isFree && s.discountPercent > 0)
     }
 
-    // Halal filters
     if (filters.islamiclyStatus !== "any") {
-      signals = signals.filter((s) => s.islamiclyStatus === filters.islamiclyStatus)
+      result = result.filter((s) => s.islamiclyStatus === filters.islamiclyStatus)
     }
     if (filters.musaffaStatus !== "any") {
-      signals = signals.filter((s) => s.musaffaStatus === filters.musaffaStatus)
+      result = result.filter((s) => s.musaffaStatus === filters.musaffaStatus)
     }
 
-    // Seller quality filters
     if (filters.minScoreXPoints > 0) {
-      signals = signals.filter((s) => s.trader.scoreXPoints >= filters.minScoreXPoints)
+      result = result.filter((s) => s.trader.scoreXPoints >= filters.minScoreXPoints)
     }
     if (filters.minStars > 0) {
-      signals = signals.filter((s) => s.trader.avgStars >= filters.minStars)
+      result = result.filter((s) => s.trader.avgStars >= filters.minStars)
     }
 
-    // Profit/Risk filters
     if (filters.minProfitPercent > 0) {
-      signals = signals.filter((s) => calculatePotentialProfit(s) >= filters.minProfitPercent)
+      result = result.filter((s) => calculatePotentialProfitFromApi(s) >= filters.minProfitPercent)
     }
     if (filters.maxLossPercent < 100) {
-      signals = signals.filter((s) => calculatePotentialLoss(s) <= filters.maxLossPercent)
+      result = result.filter((s) => calculatePotentialLossFromApi(s) <= filters.maxLossPercent)
     }
     if (filters.maxRiskRatio < 10) {
-      signals = signals.filter((s) => calculateRiskRatio(s) <= filters.maxRiskRatio)
+      result = result.filter((s) => calculateRiskRatioFromApi(s) <= filters.maxRiskRatio)
     }
 
-    return signals
-  }, [activeTab, filters])
+    return result
+  }, [signals, filters])
 
   const handleRemoveFilter = (key: keyof FilterState, value?: string) => {
     if (key === "statuses" && value) {
@@ -99,20 +180,44 @@ function SignalsContent() {
 
   const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(defaultFilters)
 
+  const mapApiSignalToCard = (apiSignal: ApiSignal) => ({
+    id: apiSignal.id,
+    ticker: apiSignal.ticker || "***",
+    entry: apiSignal.entry || 0,
+    tp1: apiSignal.tp1 || 0,
+    tp2: apiSignal.tp2 || 0,
+    sl: apiSignal.sl || 0,
+    currentPrice: apiSignal.currentPrice,
+    status: apiSignal.status,
+    isFree: apiSignal.isFree,
+    price: apiSignal.price,
+    discountPercent: apiSignal.discountPercent,
+    islamiclyStatus: apiSignal.islamiclyStatus,
+    musaffaStatus: apiSignal.musaffaStatus,
+    trader: {
+      ...apiSignal.trader,
+      totalProfit: apiSignal.trader.totalPLPercent,
+    },
+    likes: apiSignal.likes,
+    dislikes: apiSignal.dislikes,
+    isFavorite: false,
+    isPurchased: apiSignal.isPurchased,
+    createdAt: apiSignal.createdAt,
+    closedAt: apiSignal.closedAt,
+    _isLocked: apiSignal.isLocked,
+  })
+
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">
-      {/* Page Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold md:text-3xl">{t("signals.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t("signals.subtitle")}</p>
       </div>
 
-      {/* Tabs - Sticky on mobile */}
       <div className="sticky top-14 z-10 -mx-4 bg-background px-4 py-3 md:relative md:top-0 md:mx-0 md:px-0 md:py-0">
         <SignalTabs activeTab={activeTab} />
       </div>
 
-      {/* Mobile Filter Button */}
       <div className="mt-4 flex items-center justify-between md:hidden">
         <span className="text-sm text-muted-foreground">
           {filteredSignals.length} signal{filteredSignals.length !== 1 ? "s" : ""}
@@ -145,12 +250,9 @@ function SignalsContent() {
         </Sheet>
       </div>
 
-      {/* Active Filter Chips */}
       <ActiveFilterChips filters={filters} onRemoveFilter={handleRemoveFilter} className="mt-4" />
 
-      {/* Desktop Layout */}
       <div className="mt-6 flex gap-6">
-        {/* Sidebar Filters - Desktop Only */}
         <aside className="hidden w-72 shrink-0 md:block">
           <div className="sticky top-20 rounded-lg border border-border bg-card p-4">
             <div className="mb-4 flex items-center justify-between">
@@ -158,15 +260,87 @@ function SignalsContent() {
               <span className="text-xs text-muted-foreground">{filteredSignals.length} results</span>
             </div>
             <SignalFilters filters={filters} onFiltersChange={setFilters} activeTab={activeTab} />
+
+            {isLoggedIn && (
+              <div className="mt-6 pt-4 border-t border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Bookmark className="h-4 w-4" />
+                    Saved Filters
+                  </h3>
+                  <Dialog open={saveFilterDialogOpen} onOpenChange={setSaveFilterDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={!hasActiveFilters}>
+                        <Save className="h-3 w-3 mr-1" />
+                        Save
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Save Filter Preset</DialogTitle>
+                        <DialogDescription>Give your filter preset a name to quickly apply it later.</DialogDescription>
+                      </DialogHeader>
+                      <Input
+                        placeholder="Filter name..."
+                        value={newFilterName}
+                        onChange={(e) => setNewFilterName(e.target.value)}
+                      />
+                      <DialogFooter>
+                        <Button onClick={handleSaveFilter} disabled={!newFilterName.trim() || savingFilter}>
+                          {savingFilter ? "Saving..." : "Save Filter"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+
+                {savedFiltersLoading ? (
+                  <div className="h-8 w-full animate-pulse rounded bg-muted" />
+                ) : savedFilters.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No saved filters yet</p>
+                ) : (
+                  <div className="space-y-1">
+                    {savedFilters.map((sf) => (
+                      <button
+                        key={sf.id}
+                        onClick={() => handleApplySavedFilter(sf)}
+                        className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors"
+                      >
+                        {sf.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </aside>
 
-        {/* Signal Feed */}
         <main className="flex-1 min-w-0">
+          {error && (
+            <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+              <p className="text-sm text-destructive mb-2">{error}</p>
+              <Button size="sm" variant="outline" onClick={fetchSignals} className="gap-2 bg-transparent">
+                <RefreshCw className="h-4 w-4" />
+                Retry
+              </Button>
+            </div>
+          )}
+
           <div className="space-y-4">
-            {filteredSignals.length > 0 ? (
+            {isLoading ? (
+              <>
+                <SkeletonCard variant="signal" />
+                <SkeletonCard variant="signal" />
+                <SkeletonCard variant="signal" />
+              </>
+            ) : filteredSignals.length > 0 ? (
               filteredSignals.map((signal) => (
-                <SignalCard key={signal.id} signal={signal} isResult={activeTab === "results"} />
+                <SignalCard
+                  key={signal.id}
+                  signal={mapApiSignalToCard(signal) as any}
+                  isResult={activeTab === "results"}
+                />
               ))
             ) : (
               <EmptyState

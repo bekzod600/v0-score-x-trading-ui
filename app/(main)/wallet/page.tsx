@@ -5,7 +5,19 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, Wallet, History, Clock, CheckCircle2, XCircle, AlertCircle, Receipt } from "lucide-react"
+import {
+  ArrowLeft,
+  Plus,
+  Wallet,
+  History,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Receipt,
+  RefreshCw,
+  LogIn,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,19 +27,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FormField } from "@/components/ui/form-field"
 import { EmptyState } from "@/components/ui/empty-state"
 import { cn } from "@/lib/utils"
-import { useWallet } from "@/lib/wallet-context"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
 import { P2PModal } from "@/components/wallet/p2p-modal"
 import { ClickConfirmation } from "@/components/wallet/click-confirmation"
 import { formatDistanceToNow } from "date-fns"
+import { getWallet, getWalletTransactions, type WalletTransaction } from "@/lib/services/wallet-service"
 
 type PaymentMethod = "click" | "p2p"
 
 export default function WalletPage() {
   const router = useRouter()
-  const { balance, transactions } = useWallet()
-  const { isLoggedIn } = useUser()
+  const { isLoggedIn, token } = useUser()
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState("topup")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("click")
@@ -36,14 +47,53 @@ export default function WalletPage() {
   const [showClickModal, setShowClickModal] = useState(false)
   const [showP2PModal, setShowP2PModal] = useState(false)
 
-  useEffect(() => {
-    if (!isLoggedIn) {
-      router.push("/login")
+  const [balance, setBalance] = useState(0)
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchWalletData = async () => {
+    if (!token) return
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const [walletRes, txRes] = await Promise.all([getWallet(token), getWalletTransactions(token)])
+      setBalance(walletRes.balance)
+      setTransactions(txRes.transactions)
+    } catch (err) {
+      console.error("[v0] Failed to fetch wallet data:", err)
+      setError("Failed to load wallet data. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-  }, [isLoggedIn, router])
+  }
+
+  useEffect(() => {
+    if (isLoggedIn && token) {
+      fetchWalletData()
+    }
+  }, [isLoggedIn, token])
 
   if (!isLoggedIn) {
-    return null
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-6">
+        <Card className="text-center py-12">
+          <CardContent className="space-y-4">
+            <Wallet className="h-16 w-16 mx-auto text-muted-foreground" />
+            <h2 className="text-xl font-semibold">{t("auth.loginRequired")}</h2>
+            <p className="text-muted-foreground">Please log in to access your wallet</p>
+            <Link href="/login">
+              <Button className="gap-2">
+                <LogIn className="h-4 w-4" />
+                {t("auth.login")}
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   const parsedAmount = Number.parseFloat(amount) || 0
@@ -127,6 +177,16 @@ export default function WalletPage() {
         {t("action.back")}
       </Link>
 
+      {error && (
+        <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+          <p className="text-sm text-destructive mb-2">{error}</p>
+          <Button size="sm" variant="outline" onClick={fetchWalletData} className="gap-2 bg-transparent">
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Balance Card */}
       <Card className="mb-6 overflow-hidden">
         <div className="bg-gradient-to-br from-primary to-primary/80 p-6">
@@ -134,7 +194,11 @@ export default function WalletPage() {
             <Wallet className="h-6 w-6 text-primary-foreground/80" />
             <span className="text-sm text-primary-foreground/80">{t("wallet.balance")}</span>
           </div>
-          <div className="text-4xl font-bold text-primary-foreground font-mono">${balance.toFixed(2)}</div>
+          {isLoading ? (
+            <div className="h-10 w-32 animate-pulse rounded bg-primary-foreground/20" />
+          ) : (
+            <div className="text-4xl font-bold text-primary-foreground font-mono">${balance.toFixed(2)}</div>
+          )}
         </div>
       </Card>
 
@@ -289,7 +353,22 @@ export default function WalletPage() {
               <CardDescription>Your recent wallet activity</CardDescription>
             </CardHeader>
             <CardContent>
-              {transactions.length === 0 ? (
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-start justify-between gap-4 animate-pulse">
+                      <div className="flex items-start gap-3">
+                        <div className="h-4 w-4 rounded bg-muted" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-24 rounded bg-muted" />
+                          <div className="h-3 w-32 rounded bg-muted" />
+                        </div>
+                      </div>
+                      <div className="h-4 w-16 rounded bg-muted" />
+                    </div>
+                  ))}
+                </div>
+              ) : transactions.length === 0 ? (
                 <EmptyState
                   icon={Receipt}
                   title={t("wallet.noTransactions")}

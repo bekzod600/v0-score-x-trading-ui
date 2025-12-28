@@ -28,12 +28,31 @@ interface WalletContextType extends WalletState {
   clearNotifications: () => void
   // Signal check
   isSignalPurchased: (signalId: string) => boolean
+  // Added methods for API integration
+  refreshBalance: () => Promise<void>
+  setBalance: (newBalance: number) => void
 }
 
 const WalletContext = createContext<WalletContextType | null>(null)
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WalletState>(initialWalletState)
+
+  // Added setBalance for direct balance updates from API
+  const setBalance = useCallback((newBalance: number) => {
+    setState((prev) => ({
+      ...prev,
+      balance: newBalance,
+    }))
+  }, [])
+
+  // Added refreshBalance to fetch balance from API (placeholder for future backend integration)
+  const refreshBalance = useCallback(async () => {
+    // TODO: In future, fetch balance from backend API
+    // For now, this is a no-op that can be called after purchases
+    // const response = await apiRequest({ method: "GET", path: "/wallet/balance", token })
+    // setBalance(response.balance)
+  }, [])
 
   const addTransaction = useCallback(
     (
@@ -220,6 +239,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         markAllNotificationsRead,
         clearNotifications,
         isSignalPurchased,
+        // Added new methods to provider
+        refreshBalance,
+        setBalance,
       }}
     >
       {children}

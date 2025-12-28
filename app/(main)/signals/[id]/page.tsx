@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -15,6 +15,8 @@ import {
   Wallet,
   AlertCircle,
   Clock,
+  RefreshCw,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,14 +26,10 @@ import { SellerHeader } from "@/components/signals/seller-header"
 import { StatusBadge } from "@/components/signals/status-badge"
 import { HalalBadges } from "@/components/signals/halal-badges"
 import { useWallet } from "@/lib/wallet-context"
+import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
-import {
-  mockSignals,
-  calculatePotentialProfit,
-  calculatePotentialLoss,
-  calculateRiskRatio,
-  getFinalPrice,
-} from "@/lib/mock-data"
+import { useToast } from "@/lib/toast-context"
+import { getSignal, buySignal, type ApiSignal } from "@/lib/services/signals-service"
 
 const timelineSteps = [
   { key: "posted", label: "Posted" },
@@ -40,32 +38,147 @@ const timelineSteps = [
   { key: "result", label: "Result" },
 ]
 
+function calculatePotentialProfit(signal: ApiSignal): number {
+  if (!signal.entry || !signal.tp2) return 0
+  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
+}
+
+function calculatePotentialLoss(signal: ApiSignal): number {
+  if (!signal.entry || !signal.sl) return 0
+  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
+}
+
+function calculateRiskRatio(signal: ApiSignal): number {
+  const profit = calculatePotentialProfit(signal)
+  const loss = calculatePotentialLoss(signal)
+  if (loss === 0) return 0
+  return Number((profit / loss).toFixed(1))
+}
+
+function getFinalPrice(signal: ApiSignal): number {
+  if (signal.isFree) return 0
+  if (signal.discountPercent > 0) {
+    return Math.round(signal.price * (1 - signal.discountPercent / 100))
+  }
+  return signal.price
+}
+
 export default function SignalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
   const { t } = useI18n()
-  const signal = mockSignals.find((s) => s.id === id) || mockSignals[0]
+  const { showToast } = useToast()
+  const { balance, refreshBalance } = useWallet()
+  const { isLoggedIn, token } = useUser()
 
-  const { balance, isSignalPurchased, purchaseSignal } = useWallet()
-  const isPurchased = signal.isFree || isSignalPurchased(signal.id)
+  const [signal, setSignal] = useState<ApiSignal | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isBuying, setIsBuying] = useState(false)
 
-  const [isFavorite, setIsFavorite] = useState(signal.isFavorite)
-  const [likes, setLikes] = useState(signal.likes)
-  const [dislikes, setDislikes] = useState(signal.dislikes)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [likes, setLikes] = useState(0)
+  const [dislikes, setDislikes] = useState(0)
 
-  const isLocked = !signal.isFree && !isPurchased
+  const fetchSignal = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const data = await getSignal(id, token)
+      setSignal(data)
+      setLikes(data.likes)
+      setDislikes(data.dislikes)
+    } catch (err) {
+      console.error("[v0] Failed to fetch signal:", err)
+      setError("Failed to load signal. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [id, token])
+
+  useEffect(() => {
+    fetchSignal()
+  }, [fetchSignal])
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !signal) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <Link
+          href="/signals"
+          className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Signals
+        </Link>
+        <Card className="p-8 text-center">
+          <p className="text-destructive mb-4">{error || "Signal not found"}</p>
+          <Button onClick={fetchSignal} variant="outline" className="gap-2 bg-transparent">
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </Button>
+        </Card>
+      </div>
+    )
+  }
+
+  const isLocked = signal.isLocked
   const potentialProfit = calculatePotentialProfit(signal)
   const potentialLoss = calculatePotentialLoss(signal)
   const riskRatio = calculateRiskRatio(signal)
   const finalPrice = getFinalPrice(signal)
   const hasInsufficientBalance = balance < finalPrice
 
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
+    if (!isLoggedIn) {
+      showToast("Login required", "error")
+      router.push("/login")
+      return
+    }
+
     if (hasInsufficientBalance) {
+      showToast("Insufficient balance", "error")
       router.push("/wallet")
       return
     }
-    purchaseSignal(signal.id, finalPrice, signal.ticker)
+
+    if (!token) {
+      showToast("Authentication error", "error")
+      return
+    }
+
+    setIsBuying(true)
+    try {
+      const result = await buySignal(id, token)
+      if (result.success) {
+        showToast("Signal unlocked successfully!", "success")
+        // Refresh signal to get unlocked data
+        await fetchSignal()
+        // Refresh wallet balance
+        if (refreshBalance) refreshBalance()
+      } else {
+        showToast(result.message || "Failed to unlock signal", "error")
+      }
+    } catch (err: any) {
+      console.error("[v0] Buy signal error:", err)
+      if (err.status === 402 || err.message?.toLowerCase().includes("insufficient")) {
+        showToast("Insufficient balance", "error")
+        router.push("/wallet")
+      } else {
+        showToast(err.message || "Failed to unlock signal", "error")
+      }
+    } finally {
+      setIsBuying(false)
+    }
   }
 
   // Determine timeline progress
@@ -104,7 +217,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
           {/* Signal Card */}
           <Card className="overflow-hidden">
             {/* Seller Header */}
-            <SellerHeader trader={signal.trader} variant="detail" />
+            <SellerHeader trader={signal.trader as any} variant="detail" />
 
             <CardContent className="p-6">
               {/* Ticker + Status + Price */}
@@ -112,7 +225,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
                 <div>
                   <div className="flex items-center gap-3 mb-1">
                     <h1 className="text-3xl font-bold font-mono">
-                      {isLocked ? (
+                      {isLocked || !signal.ticker ? (
                         <span className="flex items-center gap-2 text-muted-foreground">
                           <Lock className="h-6 w-6" />
                           ***
@@ -148,24 +261,26 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 mb-6">
                 <div className="rounded-lg bg-muted p-4">
                   <div className="text-sm text-muted-foreground">Entry Price</div>
-                  <div className="text-xl font-bold font-mono">{isLocked ? "***" : `$${signal.entry.toFixed(2)}`}</div>
+                  <div className="text-xl font-bold font-mono">
+                    {isLocked || signal.entry === null ? "***" : `$${signal.entry.toFixed(2)}`}
+                  </div>
                 </div>
                 <div className="rounded-lg bg-success/10 p-4">
                   <div className="text-sm text-success">Take Profit 1</div>
                   <div className="text-xl font-bold font-mono text-success">
-                    {isLocked ? "***" : `$${signal.tp1.toFixed(2)}`}
+                    {isLocked || signal.tp1 === null ? "***" : `$${signal.tp1.toFixed(2)}`}
                   </div>
                 </div>
                 <div className="rounded-lg bg-success/10 p-4">
                   <div className="text-sm text-success">Take Profit 2</div>
                   <div className="text-xl font-bold font-mono text-success">
-                    {isLocked ? "***" : `$${signal.tp2.toFixed(2)}`}
+                    {isLocked || signal.tp2 === null ? "***" : `$${signal.tp2.toFixed(2)}`}
                   </div>
                 </div>
                 <div className="rounded-lg bg-destructive/10 p-4">
                   <div className="text-sm text-destructive">Stop Loss</div>
                   <div className="text-xl font-bold font-mono text-destructive">
-                    {isLocked ? "***" : `$${signal.sl.toFixed(2)}`}
+                    {isLocked || signal.sl === null ? "***" : `$${signal.sl.toFixed(2)}`}
                   </div>
                 </div>
               </div>
@@ -202,8 +317,14 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
                     size="lg"
                     variant={hasInsufficientBalance ? "outline" : "default"}
                     onClick={handlePurchase}
+                    disabled={isBuying}
                   >
-                    {hasInsufficientBalance ? (
+                    {isBuying ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : hasInsufficientBalance ? (
                       <>
                         <Wallet className="mr-2 h-4 w-4" />
                         Top Up Wallet

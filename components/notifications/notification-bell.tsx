@@ -1,8 +1,9 @@
 "use client"
 
-import { Bell, Check, Trash2 } from "lucide-react"
+import { Bell, Check, Trash2, RefreshCw } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,14 +12,86 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { useWallet } from "@/lib/wallet-context"
+import { useUser } from "@/lib/user-context"
 import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
+import { listNotifications, markRead, type Notification } from "@/lib/services/notifications-service"
 
 export function NotificationBell() {
-  const { notifications, markNotificationRead, markAllNotificationsRead, clearNotifications } = useWallet()
+  const router = useRouter()
+  const { isLoggedIn, token } = useUser()
   const [sheetOpen, setSheetOpen] = useState(false)
+
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  const fetchNotifications = useCallback(async () => {
+    if (!token) return
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const response = await listNotifications(token)
+      setNotifications(response.notifications)
+    } catch (err) {
+      console.error("[v0] Failed to fetch notifications:", err)
+      setError("Failed to load")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (isLoggedIn && token) {
+      fetchNotifications()
+    }
+  }, [isLoggedIn, token, fetchNotifications])
+
+  const handleMarkRead = async (id: string) => {
+    if (!token) return
+
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+
+    try {
+      await markRead(id, token)
+    } catch (err) {
+      console.error("[v0] Failed to mark notification as read:", err)
+      // Revert on error
+      fetchNotifications()
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    if (!token) return
+
+    const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id)
+
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+
+    try {
+      await Promise.all(unreadIds.map((id) => markRead(id, token)))
+    } catch (err) {
+      console.error("[v0] Failed to mark all as read:", err)
+      fetchNotifications()
+    }
+  }
+
+  const handleClear = () => {
+    setNotifications([])
+  }
+
+  const handleBellClick = () => {
+    if (!isLoggedIn) {
+      router.push("/login")
+      return
+    }
+  }
 
   const getTypeStyles = (type: string) => {
     switch (type) {
@@ -35,7 +108,20 @@ export function NotificationBell() {
 
   const NotificationList = ({ onItemClick }: { onItemClick?: () => void }) => (
     <>
-      {notifications.length === 0 ? (
+      {isLoading ? (
+        <div className="px-3 py-8 text-center">
+          <RefreshCw className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+          <p className="text-sm text-muted-foreground mt-2">Loading...</p>
+        </div>
+      ) : error ? (
+        <div className="px-3 py-8 text-center">
+          <p className="text-sm text-destructive mb-2">{error}</p>
+          <Button size="sm" variant="outline" onClick={fetchNotifications} className="gap-2 bg-transparent">
+            <RefreshCw className="h-3 w-3" />
+            Retry
+          </Button>
+        </div>
+      ) : notifications.length === 0 ? (
         <div className="px-3 py-12 text-center text-sm text-muted-foreground">No notifications yet</div>
       ) : (
         <div className="max-h-[60vh] overflow-y-auto">
@@ -48,7 +134,7 @@ export function NotificationBell() {
                 !notification.read && "bg-muted/30",
               )}
               onClick={() => {
-                markNotificationRead(notification.id)
+                handleMarkRead(notification.id)
                 onItemClick?.()
               }}
             >
@@ -80,11 +166,11 @@ export function NotificationBell() {
     <div className="flex gap-1">
       {notifications.length > 0 && (
         <>
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={markAllNotificationsRead}>
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleMarkAllRead}>
             <Check className="h-3 w-3 mr-1" />
             Mark all read
           </Button>
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={clearNotifications}>
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleClear}>
             <Trash2 className="h-3 w-3 mr-1" />
             Clear
           </Button>
@@ -94,7 +180,7 @@ export function NotificationBell() {
   )
 
   const BellButton = (
-    <Button variant="ghost" size="icon" className="relative">
+    <Button variant="ghost" size="icon" className="relative" onClick={handleBellClick}>
       <Bell className="h-4 w-4" />
       {unreadCount > 0 && (
         <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
@@ -104,6 +190,10 @@ export function NotificationBell() {
       <span className="sr-only">Notifications</span>
     </Button>
   )
+
+  if (!isLoggedIn) {
+    return BellButton
+  }
 
   return (
     <>

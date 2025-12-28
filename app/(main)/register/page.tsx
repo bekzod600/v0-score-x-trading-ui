@@ -5,10 +5,8 @@ import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { UserPlus, Eye, EyeOff } from "lucide-react"
+import { UserPlus, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
@@ -19,48 +17,29 @@ export default function RegisterPage() {
   const { register } = useUser()
   const { t } = useI18n()
   const { showToast } = useToast()
-
-  const [email, setEmail] = useState("")
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
-
-    if (!email || !username || !password || !confirmPassword) {
-      setError("Please fill in all fields")
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      return
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters")
-      return
-    }
-
-    setLoading(true)
-
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const success = register(email, password, username)
+    const success = register("", "", "")
     if (success) {
       showToast("Account created successfully!", "success")
       router.push("/")
     } else {
-      setError("Registration failed. Please try again.")
+      console.log("Registration failed. Please try again.")
     }
+  }
 
-    setLoading(false)
+  const handleTelegramRegister = async () => {
+    setLoading(true)
+    // TODO: Implement real Telegram login in Patch 2
+    // Registration happens automatically on first Telegram login
+    setTimeout(() => {
+      setLoading(false)
+    }, 500)
   }
 
   return (
@@ -71,77 +50,45 @@ export default function RegisterPage() {
             <UserPlus className="h-6 w-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">{t("auth.register")}</CardTitle>
-          <CardDescription>Create an account to start trading</CardDescription>
+          <CardDescription>Create an account to start trading on ScoreX</CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("auth.email")}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="username">{t("auth.username")}</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="trader123"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">{t("auth.password")}</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">{t("auth.confirmPassword")}</Label>
-              <Input
-                id="confirmPassword"
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? t("misc.loading") : t("auth.register")}
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              {t("auth.haveAccount")}{" "}
-              <Link href="/login" className="text-primary hover:underline">
-                {t("auth.login")}
-              </Link>
+        <CardContent className="space-y-4">
+          <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
+            <p className="mb-2 font-medium text-foreground">How Registration Works</p>
+            <p className="mb-3">
+              ScoreX uses Telegram for secure, passwordless authentication. When you sign in with Telegram for the first
+              time, your account is automatically created.
             </p>
-          </CardFooter>
-        </form>
+            <ul className="list-inside list-disc space-y-1">
+              <li>No email or password required</li>
+              <li>Secure authentication via Telegram</li>
+              <li>Your Telegram username becomes your ScoreX username</li>
+            </ul>
+          </div>
+
+          <Button onClick={handleTelegramRegister} className="w-full gap-2" disabled={loading} size="lg">
+            <MessageCircle className="h-5 w-5" />
+            {loading ? t("misc.loading") : "Sign up with Telegram"}
+          </Button>
+        </CardContent>
+        <CardFooter className="flex flex-col gap-4">
+          <p className="text-center text-sm text-muted-foreground">
+            {t("auth.haveAccount")}{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              {t("auth.login")}
+            </Link>
+          </p>
+          <p className="text-center text-xs text-muted-foreground">
+            By signing up, you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-foreground">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline hover:text-foreground">
+              Privacy Policy
+            </Link>
+          </p>
+        </CardFooter>
       </Card>
     </div>
   )

@@ -415,18 +415,24 @@ const I18nContext = createContext<I18nContextType | null>(null)
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>("uz")
+  const [isHydrated, setIsHydrated] = useState(false)
 
   // Load language from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem("scorex-language") as Language | null
-    if (saved && translations[saved]) {
-      setLanguageState(saved)
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("scorex-language") as Language | null
+      if (saved && translations[saved]) {
+        setLanguageState(saved)
+      }
+      setIsHydrated(true)
     }
   }, [])
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang)
-    localStorage.setItem("scorex-language", lang)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("scorex-language", lang)
+    }
   }, [])
 
   const t = useCallback(

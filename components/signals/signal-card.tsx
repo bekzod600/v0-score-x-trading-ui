@@ -24,7 +24,7 @@ import {
 } from "@/lib/mock-data"
 
 interface SignalCardProps {
-  signal: Signal
+  signal: Signal & { _isLocked?: boolean }
   isResult?: boolean
 }
 
@@ -37,7 +37,8 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
   const favorite = isFavorite(signal.id)
   const userVote = getVote(signal.id)
   const purchased = isSignalPurchased(signal.id) || signal.isPurchased
-  const isLocked = !signal.isFree && !purchased
+
+  const isLocked = signal._isLocked !== undefined ? signal._isLocked : !signal.isFree && !purchased
 
   const potentialProfit = calculatePotentialProfit(signal)
   const potentialLoss = calculatePotentialLoss(signal)
