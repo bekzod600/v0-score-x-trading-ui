@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import { mockTraders, mockSignals, type Trader } from "./mock-data"
 import { apiRequest, type ApiError } from "./api-client"
 
@@ -119,6 +120,7 @@ interface AuthMeResponse {
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UserState>(initialState)
+  const router = useRouter()
 
   const setToken = useCallback((token: string | null) => {
     setState((prev) => ({ ...prev, token }))
@@ -189,12 +191,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const requireAuth = useCallback(
     (actionName?: string): boolean => {
-      if (state.isLoggedIn) return true
-      // Could trigger a modal here in future
-      console.log(`[v0] Auth required for action: ${actionName || "unknown"}`)
+      // Block actions while still hydrating
+      if (state.isHydrating) {
+        console.log(`[v0] Auth check blocked - still hydrating (action: ${actionName || "unknown"})`)
+        return false
+      }
+
+      if (state.isLoggedIn) {
+        return true
+      }
+
+      // Not logged in - show message and redirect
+      console.log(`[v0] Auth required for action: ${actionName || "unknown"} - redirecting to login`)
+
+      // Use window for toast since we can't use hook here
+      // The redirect will happen, and user will see login page
+      router.push("/login")
+
       return false
     },
-    [state.isLoggedIn],
+    [state.isHydrating, state.isLoggedIn, router],
   )
 
   const login = useCallback(async (_email: string, _password: string): Promise<boolean> => {

@@ -11,34 +11,102 @@ import { SellerHeader } from "./seller-header"
 import { StatusBadge } from "./status-badge"
 import { HalalBadges } from "./halal-badges"
 import { useUser } from "@/lib/user-context"
-import { useWallet } from "@/lib/wallet-context"
 import { useI18n } from "@/lib/i18n-context"
 import { LoginRequiredModal } from "@/components/auth/login-required-modal"
-import {
-  type Signal,
-  calculatePotentialProfit,
-  calculatePotentialLoss,
-  calculateRiskRatio,
-  getFinalPrice,
-  getResultOutcome,
-} from "@/lib/mock-data"
+
+interface SignalCardSignal {
+  id: string
+  ticker: string
+  entry: number
+  tp1: number
+  tp2: number
+  sl: number
+  currentPrice: number
+  status: string
+  isFree: boolean
+  price: number
+  discountPercent: number
+  islamiclyStatus: string
+  musaffaStatus: string
+  trader: {
+    id: string
+    username: string
+    avatar: string
+    scoreXPoints: number
+    rank: number
+    avgStars: number
+    totalPLPercent: number
+    totalSignals: number
+    subscribers: number
+    avgDaysToResult: number
+  }
+  likes: number
+  dislikes: number
+  createdAt: string
+  closedAt: string | null
+  isLocked: boolean
+  isPurchased: boolean
+}
 
 interface SignalCardProps {
-  signal: Signal & { _isLocked?: boolean }
+  signal: SignalCardSignal
   isResult?: boolean
+}
+
+function calculatePotentialProfit(signal: SignalCardSignal): number {
+  if (!signal.entry || !signal.tp2) return 0
+  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
+}
+
+function calculatePotentialLoss(signal: SignalCardSignal): number {
+  if (!signal.entry || !signal.sl) return 0
+  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
+}
+
+function calculateRiskRatio(signal: SignalCardSignal): number {
+  const profit = calculatePotentialProfit(signal)
+  const loss = calculatePotentialLoss(signal)
+  if (loss === 0) return 0
+  return Number((profit / loss).toFixed(1))
+}
+
+function getFinalPrice(signal: SignalCardSignal): number {
+  if (signal.isFree) return 0
+  if (signal.discountPercent > 0) {
+    return Math.round(signal.price * (1 - signal.discountPercent / 100))
+  }
+  return signal.price
+}
+
+function getResultOutcome(signal: SignalCardSignal): { type: "profit" | "loss" | "neutral"; value: number } | null {
+  if (!["TP1_HIT", "TP2_HIT", "SL_HIT", "CANCEL"].includes(signal.status)) return null
+
+  if (signal.status === "TP1_HIT") {
+    const profit = signal.entry && signal.tp1 ? ((signal.tp1 - signal.entry) / signal.entry) * 100 : 0
+    return { type: "profit", value: Number(profit.toFixed(1)) }
+  }
+  if (signal.status === "TP2_HIT") {
+    const profit = signal.entry && signal.tp2 ? ((signal.tp2 - signal.entry) / signal.entry) * 100 : 0
+    return { type: "profit", value: Number(profit.toFixed(1)) }
+  }
+  if (signal.status === "SL_HIT") {
+    const loss = signal.entry && signal.sl ? ((signal.entry - signal.sl) / signal.entry) * 100 : 0
+    return { type: "loss", value: Number(loss.toFixed(1)) }
+  }
+  return { type: "neutral", value: 0 }
 }
 
 export function SignalCard({ signal, isResult = false }: SignalCardProps) {
   const { isFavorite, toggleFavorite, voteSignal, getVote, isLoggedIn } = useUser()
-  const { isSignalPurchased } = useWallet()
   const { t } = useI18n()
   const [showLoginModal, setShowLoginModal] = useState(false)
 
   const favorite = isFavorite(signal.id)
   const userVote = getVote(signal.id)
-  const purchased = isSignalPurchased(signal.id) || signal.isPurchased
 
-  const isLocked = signal._isLocked !== undefined ? signal._isLocked : !signal.isFree && !purchased
+  // Backend rule: isLocked = !isFree && !isPurchased
+  // Premium status does NOT unlock signals
+  const isLocked = signal.isLocked
 
   const potentialProfit = calculatePotentialProfit(signal)
   const potentialLoss = calculatePotentialLoss(signal)
@@ -71,7 +139,7 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
   return (
     <>
       <Card className="overflow-hidden border-border bg-card">
-        <SellerHeader trader={signal.trader} />
+        <SellerHeader trader={signal.trader as any} />
 
         <CardContent className="p-4">
           <div className="flex gap-4">
@@ -89,7 +157,7 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                     signal.ticker
                   )}
                 </span>
-                <StatusBadge status={signal.status} />
+                <StatusBadge status={signal.status as any} />
               </div>
 
               {/* Summary Stats */}
@@ -125,7 +193,7 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                 </span>
               </div>
 
-              {/* Price Levels */}
+              {/* Price Levels - Show *** if isLocked from backend */}
               <div className="grid grid-cols-4 gap-1.5 text-xs">
                 <div className="rounded bg-muted/50 px-2 py-1">
                   <span className="text-muted-foreground">EP</span>
@@ -151,7 +219,10 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                 </div>
               </div>
 
-              <HalalBadges islamiclyStatus={signal.islamiclyStatus} musaffaStatus={signal.musaffaStatus} />
+              <HalalBadges
+                islamiclyStatus={signal.islamiclyStatus as any}
+                musaffaStatus={signal.musaffaStatus as any}
+              />
 
               {/* Result Outcome */}
               {isResult && outcome && signal.closedAt && (

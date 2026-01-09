@@ -57,21 +57,28 @@ export function useToast() {
 function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   if (toasts.length === 0) return null
 
-  const icons = {
-    success: CheckCircle2,
-    error: AlertCircle,
-    warning: AlertTriangle,
-    info: Info,
+  const getIcon = (type: ToastType) => {
+    switch (type) {
+      case "success":
+        return CheckCircle2
+      case "error":
+        return AlertCircle
+      case "warning":
+        return AlertTriangle
+      case "info":
+      default:
+        return Info
+    }
   }
 
-  const styles = {
+  const styles: Record<ToastType, string> = {
     success: "border-success/30 bg-success/10",
     error: "border-destructive/30 bg-destructive/10",
     warning: "border-warning/30 bg-warning/10",
     info: "border-primary/30 bg-primary/10",
   }
 
-  const iconStyles = {
+  const iconStyles: Record<ToastType, string> = {
     success: "text-success",
     error: "text-destructive",
     warning: "text-warning",
@@ -81,16 +88,18 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 flex flex-col gap-2 md:bottom-4 md:left-auto md:right-4 md:w-96">
       {toasts.map((toast) => {
-        const Icon = icons[toast.type]
+        const Icon = getIcon(toast.type)
+        const style = styles[toast.type] || styles.info
+        const iconStyle = iconStyles[toast.type] || iconStyles.info
         return (
           <div
             key={toast.id}
             className={cn(
               "flex items-start gap-3 rounded-lg border p-4 shadow-lg backdrop-blur-sm animate-in slide-in-from-right-full duration-300",
-              styles[toast.type],
+              style,
             )}
           >
-            <Icon className={cn("h-5 w-5 shrink-0 mt-0.5", iconStyles[toast.type])} />
+            <Icon className={cn("h-5 w-5 shrink-0 mt-0.5", iconStyle)} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{toast.title}</p>
               {toast.message && <p className="text-xs text-muted-foreground mt-0.5">{toast.message}</p>}

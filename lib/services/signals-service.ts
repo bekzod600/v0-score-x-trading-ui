@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api-client"
-import { mockSignals } from "@/lib/mock-data"
+import type { mockSignals } from "@/lib/mock-data"
 
 // Types matching backend response structure
 export interface ApiTrader {
@@ -90,7 +90,7 @@ function mockToApiSignal(signal: (typeof mockSignals)[0]): ApiSignal {
 /**
  * Fetch list of signals from backend
  * GET /signals
- * Falls back to mock data if API unavailable
+ * No mock data fallback - throws on API error
  */
 export async function listSignals(params?: {
   tab?: "live" | "results"
@@ -105,76 +105,46 @@ export async function listSignals(params?: {
   const query = searchParams.toString()
   const path = `/signals${query ? `?${query}` : ""}`
 
-  try {
-    return await apiRequest<SignalsListResponse>({
-      method: "GET",
-      path,
-      timeoutMs: 5000,
-    })
-  } catch (err) {
-    console.log("[v0] API unavailable, using mock data for signals")
+  const response = await apiRequest<SignalsListResponse>({
+    method: "GET",
+    path,
+    timeoutMs: 10000,
+  })
 
-    const isResults = params?.tab === "results"
-    const resultStatuses = ["TP1_HIT", "TP2_HIT", "SL_HIT", "CANCEL"]
-    const liveStatuses = ["WAITING_ENTRY", "ACTIVE", "HOLD"]
-
-    const filteredSignals = mockSignals.filter((s) =>
-      isResults ? resultStatuses.includes(s.status) : liveStatuses.includes(s.status),
-    )
-
-    return {
-      signals: filteredSignals.map(mockToApiSignal),
-      total: filteredSignals.length,
-      page: params?.page || 1,
-      limit: params?.limit || 20,
-    }
+  return {
+    signals: Array.isArray(response?.signals) ? response.signals : [],
+    total: response?.total || 0,
+    page: response?.page || 1,
+    limit: response?.limit || 20,
   }
 }
 
 /**
  * Fetch single signal detail from backend
  * GET /signals/:id
- * Falls back to mock data if API unavailable
+ * No mock data fallback - throws on API error
+ * Token is optional - backend returns locked data for unauthenticated users
  */
 export async function getSignal(id: string, token?: string | null): Promise<ApiSignal> {
-  try {
-    return await apiRequest<ApiSignal>({
-      method: "GET",
-      path: `/signals/${id}`,
-      token,
-      timeoutMs: 5000,
-    })
-  } catch (err) {
-    console.log("[v0] API unavailable, using mock data for signal detail")
-
-    const mockSignal = mockSignals.find((s) => s.id === id)
-    if (!mockSignal) {
-      throw new Error("Signal not found")
-    }
-
-    return mockToApiSignal(mockSignal)
-  }
+  return await apiRequest<ApiSignal>({
+    method: "GET",
+    path: `/signals/${id}`,
+    token: token || undefined,
+    timeoutMs: 10000,
+  })
 }
 
 /**
  * Purchase/unlock a signal
  * POST /signals/:id/buy
+ * No mock data fallback - throws on API error
  * Requires authentication
  */
 export async function buySignal(id: string, token: string): Promise<BuySignalResponse> {
-  try {
-    return await apiRequest<BuySignalResponse>({
-      method: "POST",
-      path: `/signals/${id}/buy`,
-      token,
-      timeoutMs: 10000,
-    })
-  } catch (err) {
-    console.log("[v0] API unavailable, mocking buy success")
-    return {
-      success: true,
-      message: "Signal unlocked (demo mode)",
-      newBalance: 50000,
-    }
-  }
+  return await apiRequest<BuySignalResponse>({
+    method: "POST",
+    path: `/signals/${id}/buy`,
+    token,
+    timeoutMs: 15000,
+  })
 }

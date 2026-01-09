@@ -15,7 +15,7 @@ type LoginStep = "idle" | "loading" | "awaiting" | "success" | "error"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { setToken, hydrateAuth, isLoggedIn } = useUser()
+  const { setToken, hydrateAuth, isLoggedIn, isHydrating } = useUser()
   const { t } = useI18n()
   const { showToast } = useToast()
 
@@ -27,21 +27,32 @@ export default function LoginPage() {
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+  const isPollingRef = useRef(false)
 
-  // Redirect if already logged in
   useEffect(() => {
-    if (isLoggedIn) {
+    if (!isHydrating && isLoggedIn) {
       router.push("/")
     }
-  }, [isLoggedIn, router])
+  }, [isLoggedIn, isHydrating, router])
+
+  const stopAllTimers = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current)
+      pollingRef.current = null
+    }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current)
+      countdownRef.current = null
+    }
+    isPollingRef.current = false
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current)
-      if (countdownRef.current) clearInterval(countdownRef.current)
+      stopAllTimers()
     }
-  }, [])
+  }, [stopAllTimers])
 
   useEffect(() => {
     if (step === "awaiting" && countdown > 0) {
@@ -49,11 +60,10 @@ export default function LoginPage() {
         setCountdown((prev) => {
           if (prev <= 1) {
             // Expired
-            if (countdownRef.current) clearInterval(countdownRef.current)
-            if (pollingRef.current) clearInterval(pollingRef.current)
+            stopAllTimers()
             setStep("error")
             setError("Login session expired. Please try again.")
-            showToast("Login session expired", "error")
+            showToast("error", "Login session expired")
             return 0
           }
           return prev - 1
@@ -62,27 +72,43 @@ export default function LoginPage() {
     }
 
     return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current)
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current)
+        countdownRef.current = null
+      }
     }
-  }, [step, countdown, showToast])
+  }, [step, countdown, showToast, stopAllTimers])
 
   const startPolling = useCallback(
     (loginId: string) => {
+      if (isPollingRef.current) {
+        console.log("[v0] Polling already active, skipping")
+        return
+      }
+      isPollingRef.current = true
+
       pollingRef.current = setInterval(async () => {
+        if (!isPollingRef.current) {
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+          }
+          return
+        }
+
         try {
           const statusRes = await getTelegramStatus(loginId)
 
           if (statusRes.status === "CONFIRMED" && statusRes.accessToken) {
             // Stop polling
-            if (pollingRef.current) clearInterval(pollingRef.current)
-            if (countdownRef.current) clearInterval(countdownRef.current)
+            stopAllTimers()
 
             // Save token and hydrate
             setToken(statusRes.accessToken)
             await hydrateAuth()
 
             setStep("success")
-            showToast("Successfully logged in!", "success")
+            showToast("success", "Successfully logged in!")
 
             // Redirect to home after brief delay
             setTimeout(() => {
@@ -90,12 +116,11 @@ export default function LoginPage() {
             }, 500)
           } else if (statusRes.status === "EXPIRED") {
             // Stop polling
-            if (pollingRef.current) clearInterval(pollingRef.current)
-            if (countdownRef.current) clearInterval(countdownRef.current)
+            stopAllTimers()
 
             setStep("error")
             setError("Login session expired. Please try again.")
-            showToast("Login session expired", "error")
+            showToast("error", "Login session expired")
           }
           // If PENDING, continue polling
         } catch {
@@ -103,10 +128,14 @@ export default function LoginPage() {
         }
       }, 2000) // Poll every 2 seconds
     },
-    [setToken, hydrateAuth, showToast, router],
+    [setToken, hydrateAuth, showToast, router, stopAllTimers],
   )
 
   const handleTelegramLogin = async () => {
+    if (step === "loading" || step === "awaiting") {
+      return
+    }
+
     setStep("loading")
     setError("")
 
@@ -122,13 +151,12 @@ export default function LoginPage() {
       setStep("error")
       const message = err instanceof Error ? err.message : "Failed to initiate login"
       setError(message)
-      showToast(message, "error")
+      showToast("error", message)
     }
   }
 
   const handleCancel = () => {
-    if (pollingRef.current) clearInterval(pollingRef.current)
-    if (countdownRef.current) clearInterval(countdownRef.current)
+    stopAllTimers()
     setStep("idle")
     setLoginData(null)
     setCountdown(0)
@@ -148,6 +176,19 @@ export default function LoginPage() {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
+  if (isHydrating) {
+    return (
+      <div className="container mx-auto flex min-h-[80vh] items-center justify-center px-4 py-8">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

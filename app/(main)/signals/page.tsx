@@ -68,10 +68,11 @@ function SignalsContent() {
     setError(null)
     try {
       const response = await listSignals({ tab: activeTab })
-      setSignals(response.signals)
-    } catch (err) {
+      setSignals(Array.isArray(response?.signals) ? response.signals : [])
+    } catch (err: any) {
       console.error("[v0] Failed to fetch signals:", err)
-      setError("Failed to load signals. Please try again.")
+      setError(err?.message || "Failed to load signals. Please try again.")
+      setSignals([])
     } finally {
       setIsLoading(false)
     }
@@ -195,16 +196,23 @@ function SignalsContent() {
     islamiclyStatus: apiSignal.islamiclyStatus,
     musaffaStatus: apiSignal.musaffaStatus,
     trader: {
-      ...apiSignal.trader,
-      totalProfit: apiSignal.trader.totalPLPercent,
+      id: apiSignal.trader.id,
+      username: apiSignal.trader.username,
+      avatar: apiSignal.trader.avatar,
+      scoreXPoints: apiSignal.trader.scoreXPoints,
+      rank: apiSignal.trader.rank,
+      avgStars: apiSignal.trader.avgStars,
+      totalPLPercent: apiSignal.trader.totalPLPercent,
+      totalSignals: apiSignal.trader.totalSignals,
+      subscribers: apiSignal.trader.subscribers,
+      avgDaysToResult: apiSignal.trader.avgDaysToResult,
     },
     likes: apiSignal.likes,
     dislikes: apiSignal.dislikes,
-    isFavorite: false,
-    isPurchased: apiSignal.isPurchased,
     createdAt: apiSignal.createdAt,
     closedAt: apiSignal.closedAt,
-    _isLocked: apiSignal.isLocked,
+    isLocked: apiSignal.isLocked,
+    isPurchased: apiSignal.isPurchased,
   })
 
   return (
@@ -336,11 +344,7 @@ function SignalsContent() {
               </>
             ) : filteredSignals.length > 0 ? (
               filteredSignals.map((signal) => (
-                <SignalCard
-                  key={signal.id}
-                  signal={mapApiSignalToCard(signal) as any}
-                  isResult={activeTab === "results"}
-                />
+                <SignalCard key={signal.id} signal={mapApiSignalToCard(signal)} isResult={activeTab === "results"} />
               ))
             ) : (
               <EmptyState

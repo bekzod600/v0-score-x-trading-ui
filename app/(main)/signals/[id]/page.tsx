@@ -69,7 +69,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
   const { t } = useI18n()
   const { showToast } = useToast()
   const { balance, refreshBalance } = useWallet()
-  const { isLoggedIn, token } = useUser()
+  const { isLoggedIn, token, requireAuth } = useUser()
 
   const [signal, setSignal] = useState<ApiSignal | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -88,9 +88,9 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
       setSignal(data)
       setLikes(data.likes)
       setDislikes(data.dislikes)
-    } catch (err) {
+    } catch (err: any) {
       console.error("[v0] Failed to fetch signal:", err)
-      setError("Failed to load signal. Please try again.")
+      setError(err?.message || "Failed to load signal. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -131,7 +131,10 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
     )
   }
 
+  // Backend rule: isLocked = !isFree && !isPurchased
+  // Premium status does NOT unlock signals
   const isLocked = signal.isLocked
+
   const potentialProfit = calculatePotentialProfit(signal)
   const potentialLoss = calculatePotentialLoss(signal)
   const riskRatio = calculateRiskRatio(signal)
@@ -139,9 +142,8 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
   const hasInsufficientBalance = balance < finalPrice
 
   const handlePurchase = async () => {
-    if (!isLoggedIn) {
-      showToast("Login required", "error")
-      router.push("/login")
+    // Check authentication first
+    if (!requireAuth("buy_signal")) {
       return
     }
 
@@ -161,7 +163,6 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
       const result = await buySignal(id, token)
       if (result.success) {
         showToast("Signal unlocked successfully!", "success")
-        // Refresh signal to get unlocked data
         await fetchSignal()
         // Refresh wallet balance
         if (refreshBalance) refreshBalance()
@@ -257,7 +258,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
 
-              {/* Price Levels */}
+              {/* Price Levels - Show *** if isLocked from backend */}
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4 mb-6">
                 <div className="rounded-lg bg-muted p-4">
                   <div className="text-sm text-muted-foreground">Entry Price</div>
