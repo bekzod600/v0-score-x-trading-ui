@@ -105,11 +105,22 @@ export async function listSignals(params?: {
   const query = searchParams.toString()
   const path = `/signals${query ? `?${query}` : ""}`
 
-  const response = await apiRequest<SignalsListResponse>({
+  // Backend may return array directly or { signals: [...] } format
+  const response = await apiRequest<ApiSignal[] | SignalsListResponse>({
     method: "GET",
     path,
     timeoutMs: 10000,
   })
+
+  // Handle both array response and object response formats
+  if (Array.isArray(response)) {
+    return {
+      signals: response,
+      total: response.length,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+    }
+  }
 
   return {
     signals: Array.isArray(response?.signals) ? response.signals : [],

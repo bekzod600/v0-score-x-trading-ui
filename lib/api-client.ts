@@ -69,7 +69,8 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
       data = { message: text || "Unknown response" }
     }
 
-    if (!response.ok) {
+    // 304 Not Modified is a successful response - browser will use cached data
+    if (!response.ok && response.status !== 304) {
       const errorMessage =
         (data && typeof data === "object" && "message" in data && typeof data.message === "string"
           ? data.message
