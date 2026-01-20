@@ -181,39 +181,45 @@ function SignalsContent() {
 
   const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(defaultFilters)
 
-  const mapApiSignalToCard = (apiSignal: ApiSignal) => ({
-    id: apiSignal.id,
-    ticker: apiSignal.ticker || "***",
-    entry: apiSignal.entry || 0,
-    tp1: apiSignal.tp1 || 0,
-    tp2: apiSignal.tp2 || 0,
-    sl: apiSignal.sl || 0,
-    currentPrice: apiSignal.currentPrice,
-    status: apiSignal.status,
-    isFree: apiSignal.isFree,
-    price: apiSignal.price,
-    discountPercent: apiSignal.discountPercent,
-    islamiclyStatus: apiSignal.islamiclyStatus,
-    musaffaStatus: apiSignal.musaffaStatus,
-    trader: {
-      id: apiSignal.trader.id,
-      username: apiSignal.trader.username,
-      avatar: apiSignal.trader.avatar,
-      scoreXPoints: apiSignal.trader.scoreXPoints,
-      rank: apiSignal.trader.rank,
-      avgStars: apiSignal.trader.avgStars,
-      totalPLPercent: apiSignal.trader.totalPLPercent,
-      totalSignals: apiSignal.trader.totalSignals,
-      subscribers: apiSignal.trader.subscribers,
-      avgDaysToResult: apiSignal.trader.avgDaysToResult,
-    },
-    likes: apiSignal.likes,
-    dislikes: apiSignal.dislikes,
-    createdAt: apiSignal.createdAt,
-    closedAt: apiSignal.closedAt,
-    isLocked: apiSignal.isLocked,
-    isPurchased: apiSignal.isPurchased,
-  })
+  const mapApiSignalToCard = (apiSignal: ApiSignal) => {
+    if (!apiSignal || !apiSignal.id) {
+      return null
+    }
+    const trader = apiSignal.trader || {}
+    return {
+      id: apiSignal.id,
+      ticker: apiSignal.ticker || "***",
+      entry: apiSignal.entry || 0,
+      tp1: apiSignal.tp1 || 0,
+      tp2: apiSignal.tp2 || 0,
+      sl: apiSignal.sl || 0,
+      currentPrice: apiSignal.currentPrice,
+      status: apiSignal.status,
+      isFree: apiSignal.isFree,
+      price: apiSignal.price,
+      discountPercent: apiSignal.discountPercent,
+      islamiclyStatus: apiSignal.islamiclyStatus,
+      musaffaStatus: apiSignal.musaffaStatus,
+      trader: {
+        id: trader.id || "",
+        username: trader.username || "Unknown",
+        avatar: trader.avatar || "",
+        scoreXPoints: trader.scoreXPoints || 0,
+        rank: trader.rank || 0,
+        avgStars: trader.avgStars || 0,
+        totalPLPercent: trader.totalPLPercent || 0,
+        totalSignals: trader.totalSignals || 0,
+        subscribers: trader.subscribers || 0,
+        avgDaysToResult: trader.avgDaysToResult || 0,
+      },
+      likes: apiSignal.likes || 0,
+      dislikes: apiSignal.dislikes || 0,
+      createdAt: apiSignal.createdAt,
+      closedAt: apiSignal.closedAt,
+      isLocked: apiSignal.isLocked,
+      isPurchased: apiSignal.isPurchased,
+    }
+  }
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">
@@ -343,9 +349,12 @@ function SignalsContent() {
                 <SkeletonCard variant="signal" />
               </>
             ) : filteredSignals.length > 0 ? (
-              filteredSignals.map((signal) => (
-                <SignalCard key={signal.id} signal={mapApiSignalToCard(signal)} isResult={activeTab === "results"} />
-              ))
+              filteredSignals
+                .map((signal) => mapApiSignalToCard(signal))
+                .filter((mapped): mapped is NonNullable<typeof mapped> => mapped !== null)
+                .map((signal) => (
+                  <SignalCard key={signal.id} signal={signal} isResult={activeTab === "results"} />
+                ))
             ) : (
               <EmptyState
                 icon={TrendingUp}
