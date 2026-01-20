@@ -183,12 +183,12 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
               {/* Current Price + Estimated Time to Result */}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>
-                  {t("signals.current")}: <span className="font-mono">${signal.currentPrice.toFixed(2)}</span>
+                  {t("signals.current")}: <span className="font-mono">${(signal.currentPrice ?? 0).toFixed(2)}</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {t("signals.etaLabel")}:{" "}
-                  <span className="font-medium text-foreground">{signal.trader.avgDaysToResult.toFixed(1)}</span>{" "}
+                  <span className="font-medium text-foreground">{(signal.trader?.avgDaysToResult ?? 0).toFixed(1)}</span>{" "}
                   {t("signals.etaDays")}
                 </span>
               </div>
@@ -197,24 +197,24 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
               <div className="grid grid-cols-4 gap-1.5 text-xs">
                 <div className="rounded bg-muted/50 px-2 py-1">
                   <span className="text-muted-foreground">EP</span>
-                  <div className="font-mono font-medium">{isLocked ? "***" : `$${signal.entry.toFixed(0)}`}</div>
+                  <div className="font-mono font-medium">{isLocked ? "***" : `$${(signal.entry ?? 0).toFixed(0)}`}</div>
                 </div>
                 <div className="rounded bg-success/5 px-2 py-1">
                   <span className="text-success">TP1</span>
                   <div className="font-mono font-medium text-success">
-                    {isLocked ? "***" : `$${signal.tp1.toFixed(0)}`}
+                    {isLocked ? "***" : `$${(signal.tp1 ?? 0).toFixed(0)}`}
                   </div>
                 </div>
                 <div className="rounded bg-success/5 px-2 py-1">
                   <span className="text-success">TP2</span>
                   <div className="font-mono font-medium text-success">
-                    {isLocked ? "***" : `$${signal.tp2.toFixed(0)}`}
+                    {isLocked ? "***" : `$${(signal.tp2 ?? 0).toFixed(0)}`}
                   </div>
                 </div>
                 <div className="rounded bg-destructive/5 px-2 py-1">
                   <span className="text-destructive">SL</span>
                   <div className="font-mono font-medium text-destructive">
-                    {isLocked ? "***" : `$${signal.sl.toFixed(0)}`}
+                    {isLocked ? "***" : `$${(signal.sl ?? 0).toFixed(0)}`}
                   </div>
                 </div>
               </div>

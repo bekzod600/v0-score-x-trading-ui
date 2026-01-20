@@ -18,8 +18,10 @@ const statusConfig: Record<SignalStatus, { label: string; className: string }> =
   CANCEL: { label: "Cancelled", className: "bg-muted text-muted-foreground border-border" },
 }
 
+const defaultConfig = { label: "Unknown", className: "bg-muted text-muted-foreground border-border" }
+
 export function StatusBadge({ status, size = "sm", className }: StatusBadgeProps) {
-  const config = statusConfig[status]
+  const config = statusConfig[status] || defaultConfig
 
   return (
     <Badge

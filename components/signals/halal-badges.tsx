@@ -22,9 +22,11 @@ const musaffaConfig: Record<MusaffaStatus, { label: string; className: string }>
   unknown: { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" },
 }
 
+const defaultConfig = { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" }
+
 export function HalalBadges({ islamiclyStatus, musaffaStatus, size = "sm", className }: HalalBadgesProps) {
-  const islamicly = islamiclyConfig[islamiclyStatus]
-  const musaffa = musaffaConfig[musaffaStatus]
+  const islamicly = islamiclyConfig[islamiclyStatus] || defaultConfig
+  const musaffa = musaffaConfig[musaffaStatus] || defaultConfig
 
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
