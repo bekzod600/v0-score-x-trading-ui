@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000"
+const BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000").replace(/\/+$/, "")
 
 export interface ApiError {
   status: number
@@ -18,10 +18,12 @@ export interface ApiRequestOptions {
 export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
   const { method, path, token, body, headers: customHeaders, timeoutMs = 15000 } = opts
 
-  const url = `${BASE_URL}${path}`
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`
+  const url = `${BASE_URL}${normalizedPath}`
 
   const headers: Record<string, string> = {
     Accept: "application/json",
+    "ngrok-skip-browser-warning": "true", // Required for ngrok free tier
     ...customHeaders,
   }
 
@@ -36,15 +38,21 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
+  console.log(`[v0] API ${method} ${url}`)
+
   try {
     const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
+      credentials: "omit", // Don't send cookies to avoid CORS preflight issues
+      mode: "cors",
     })
 
     clearTimeout(timeoutId)
+
+    console.log(`[v0] API response status: ${response.status}`)
 
     let data: unknown
     const contentType = response.headers.get("content-type")
@@ -57,6 +65,7 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
       }
     } else {
       const text = await response.text()
+      console.log(`[v0] Non-JSON response:`, text.substring(0, 200))
       data = { message: text || "Unknown response" }
     }
 
@@ -78,6 +87,8 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
   } catch (err) {
     clearTimeout(timeoutId)
 
+    console.error(`[v0] API error for ${method} ${url}:`, err)
+
     if (err && typeof err === "object" && "status" in err) {
       throw err as ApiError
     }
@@ -93,7 +104,10 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
 
       const error: ApiError = {
         status: 0,
-        message: err.message || "Network error",
+        message:
+          err.message === "Failed to fetch"
+            ? "Cannot connect to API. Check CORS settings on your backend."
+            : err.message || "Network error",
       }
       throw error
     }
