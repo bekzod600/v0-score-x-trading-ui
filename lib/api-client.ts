@@ -36,9 +36,9 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
   }
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-
-  console.log(`[v0] API ${method} ${url}`)
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error("Request timeout"))
+  }, timeoutMs)
 
   try {
     const response = await fetch(url, {
@@ -96,9 +96,11 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
 
     if (err instanceof Error) {
       if (err.name === "AbortError") {
+        // Request was cancelled (either by timeout or component unmount)
+        // Return null/empty instead of throwing to avoid error states during unmount
         const error: ApiError = {
-          status: 408,
-          message: "Request timeout",
+          status: 0,
+          message: "Request cancelled",
         }
         throw error
       }

@@ -87,6 +87,103 @@ function mockToApiSignal(signal: (typeof mockSignals)[0]): ApiSignal {
   }
 }
 
+// Raw API response format (snake_case from backend)
+interface RawApiSignal {
+  id: string
+  ticker?: string | null
+  ep?: number | null
+  entry?: number | null
+  tp1?: number | null
+  tp2?: number | null
+  sl?: number | null
+  current_price?: number
+  currentPrice?: number
+  status: string
+  access_type?: string
+  isFree?: boolean
+  is_free?: boolean
+  price?: number
+  discount_percent?: number
+  discountPercent?: number
+  islamicly_status?: string
+  islamiclyStatus?: string
+  musaffa_status?: string
+  musaffaStatus?: string
+  trader?: RawApiTrader | null
+  likes?: number
+  dislikes?: number
+  created_at?: string
+  createdAt?: string
+  closed_at?: string | null
+  closedAt?: string | null
+  isLocked?: boolean
+  is_locked?: boolean
+  is_purchased?: boolean
+  isPurchased?: boolean
+}
+
+interface RawApiTrader {
+  id?: string
+  username?: string
+  avatar?: string
+  score_x_points?: number
+  scoreXPoints?: number
+  rank?: number
+  avg_stars?: number
+  avgStars?: number
+  total_pl_percent?: number
+  totalPLPercent?: number
+  total_signals?: number
+  totalSignals?: number
+  subscribers?: number
+  avg_days_to_result?: number
+  avgDaysToResult?: number
+}
+
+/**
+ * Transform raw API response (snake_case) to frontend format (camelCase)
+ */
+function normalizeSignal(raw: RawApiSignal): ApiSignal {
+  const trader = raw.trader || {}
+  const isFree = raw.isFree ?? raw.is_free ?? raw.access_type === "free" ?? false
+  const isPurchased = raw.isPurchased ?? raw.is_purchased ?? false
+  const isLocked = raw.isLocked ?? raw.is_locked ?? (!isFree && !isPurchased)
+  
+  return {
+    id: raw.id,
+    ticker: raw.ticker || null,
+    entry: raw.entry ?? raw.ep ?? null,
+    tp1: raw.tp1 ?? null,
+    tp2: raw.tp2 ?? null,
+    sl: raw.sl ?? null,
+    currentPrice: raw.currentPrice ?? raw.current_price ?? 0,
+    status: (raw.status || "WAITING_ENTRY") as ApiSignal["status"],
+    isFree,
+    price: raw.price ?? 0,
+    discountPercent: raw.discountPercent ?? raw.discount_percent ?? 0,
+    islamiclyStatus: (raw.islamiclyStatus ?? raw.islamicly_status ?? "NOT_COVERED") as ApiSignal["islamiclyStatus"],
+    musaffaStatus: (raw.musaffaStatus ?? raw.musaffa_status ?? "NOT_COVERED") as ApiSignal["musaffaStatus"],
+    trader: {
+      id: trader.id || "",
+      username: trader.username || "Unknown",
+      avatar: trader.avatar || "",
+      scoreXPoints: trader.scoreXPoints ?? trader.score_x_points ?? 0,
+      rank: trader.rank ?? 0,
+      avgStars: trader.avgStars ?? trader.avg_stars ?? 0,
+      totalPLPercent: trader.totalPLPercent ?? trader.total_pl_percent ?? 0,
+      totalSignals: trader.totalSignals ?? trader.total_signals ?? 0,
+      subscribers: trader.subscribers ?? 0,
+      avgDaysToResult: trader.avgDaysToResult ?? trader.avg_days_to_result ?? 0,
+    },
+    likes: raw.likes ?? 0,
+    dislikes: raw.dislikes ?? 0,
+    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
+    closedAt: raw.closedAt ?? raw.closed_at ?? null,
+    isLocked,
+    isPurchased,
+  }
+}
+
 /**
  * Fetch list of signals from backend
  * GET /signals
@@ -106,28 +203,34 @@ export async function listSignals(params?: {
   const path = `/signals${query ? `?${query}` : ""}`
 
   // Backend may return array directly or { signals: [...] } format
-  const response = await apiRequest<ApiSignal[] | SignalsListResponse>({
+  const response = await apiRequest<RawApiSignal[] | { signals: RawApiSignal[]; total?: number; page?: number; limit?: number }>({
     method: "GET",
     path,
     timeoutMs: 10000,
   })
 
   // Handle both array response and object response formats
+  let rawSignals: RawApiSignal[] = []
+  let total = 0
+  let page = params?.page || 1
+  let limit = params?.limit || 20
+  
   if (Array.isArray(response)) {
-    return {
-      signals: response,
-      total: response.length,
-      page: params?.page || 1,
-      limit: params?.limit || 20,
-    }
+    rawSignals = response
+    total = response.length
+  } else if (response && typeof response === "object") {
+    rawSignals = Array.isArray(response.signals) ? response.signals : []
+    total = response.total ?? rawSignals.length
+    page = response.page ?? page
+    limit = response.limit ?? limit
   }
 
-  return {
-    signals: Array.isArray(response?.signals) ? response.signals : [],
-    total: response?.total || 0,
-    page: response?.page || 1,
-    limit: response?.limit || 20,
-  }
+  // Normalize all signals to frontend format
+  const signals = rawSignals
+    .filter((s): s is RawApiSignal => s !== null && s !== undefined && typeof s === "object" && "id" in s)
+    .map(normalizeSignal)
+
+  return { signals, total, page, limit }
 }
 
 /**

@@ -63,18 +63,25 @@ function SignalsContent() {
   const [newFilterName, setNewFilterName] = useState("")
   const [savingFilter, setSavingFilter] = useState(false)
 
-  const fetchSignals = useCallback(async () => {
+  const fetchSignals = useCallback(async (ignoreRef?: { current: boolean }) => {
     setIsLoading(true)
     setError(null)
     try {
       const response = await listSignals({ tab: activeTab })
+      // Check if this request was cancelled/superseded
+      if (ignoreRef?.current) return
       setSignals(Array.isArray(response?.signals) ? response.signals : [])
     } catch (err: any) {
+      // Ignore errors from cancelled requests
+      if (ignoreRef?.current) return
+      if (err?.message === "Request cancelled") return
       console.error("[v0] Failed to fetch signals:", err)
       setError(err?.message || "Failed to load signals. Please try again.")
       setSignals([])
     } finally {
-      setIsLoading(false)
+      if (!ignoreRef?.current) {
+        setIsLoading(false)
+      }
     }
   }, [activeTab])
 
@@ -93,7 +100,11 @@ function SignalsContent() {
   }, [isLoggedIn, token])
 
   useEffect(() => {
-    fetchSignals()
+    const ignoreRef = { current: false }
+    fetchSignals(ignoreRef)
+    return () => {
+      ignoreRef.current = true
+    }
   }, [fetchSignals])
 
   useEffect(() => {
