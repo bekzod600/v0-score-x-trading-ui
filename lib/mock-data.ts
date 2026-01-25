@@ -1,7 +1,7 @@
 export type SignalStatus = "WAITING_ENTRY" | "ACTIVE" | "TP1_HIT" | "TP2_HIT" | "SL_HIT" | "HOLD" | "CANCEL"
 
-export type IslamiclyStatus = "compliant" | "non-compliant" | "unknown"
-export type MusaffaStatus = "halal" | "not-halal" | "unknown"
+export type IslamiclyStatus = "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
+export type MusaffaStatus = "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
 
 export interface Trader {
   id: string
