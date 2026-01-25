@@ -213,7 +213,7 @@ function normalizeSignal(raw: RawApiSignal): ApiSignal {
 
 /**
  * Fetch list of signals from backend
- * GET /signals
+ * GET /signals?tab=live (default) or GET /signals?tab=results
  * No mock data fallback - throws on API error
  */
 export async function listSignals(params?: {
@@ -222,12 +222,13 @@ export async function listSignals(params?: {
   limit?: number
 }): Promise<SignalsListResponse> {
   const searchParams = new URLSearchParams()
-  if (params?.tab) searchParams.set("tab", params.tab)
+  // Always set tab parameter, defaulting to "live"
+  searchParams.set("tab", params?.tab || "live")
   if (params?.page) searchParams.set("page", String(params.page))
   if (params?.limit) searchParams.set("limit", String(params.limit))
 
   const query = searchParams.toString()
-  const path = `/signals${query ? `?${query}` : ""}`
+  const path = `/signals?${query}`
 
   // Backend may return array directly or { signals: [...] } format
   const response = await apiRequest<RawApiSignal[] | { signals: RawApiSignal[]; total?: number; page?: number; limit?: number }>({
