@@ -194,8 +194,15 @@ function SignalsContent() {
 
   const mapApiSignalToCard = (apiSignal: ApiSignal) => {
     if (!apiSignal || !apiSignal.id) {
+      console.error('[v0] Invalid signal:', apiSignal)
       return null
     }
+    console.log('[v0] Mapping signal:', {
+      id: apiSignal.id,
+      ticker: apiSignal.ticker,
+      islamicly: apiSignal.islamiclyStatus,
+      musaffa: apiSignal.musaffaStatus
+    })
     const trader = apiSignal.trader || {}
     return {
       id: apiSignal.id,
