@@ -52,8 +52,6 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
 
     clearTimeout(timeoutId)
 
-    console.log(`[v0] API response status: ${response.status}`)
-
     let data: unknown
     const contentType = response.headers.get("content-type")
 
@@ -65,7 +63,6 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
       }
     } else {
       const text = await response.text()
-      console.log(`[v0] Non-JSON response:`, text.substring(0, 200))
       data = { message: text || "Unknown response" }
     }
 
@@ -87,8 +84,6 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
     return data as T
   } catch (err) {
     clearTimeout(timeoutId)
-
-    console.error(`[v0] API error for ${method} ${url}:`, err)
 
     if (err && typeof err === "object" && "status" in err) {
       throw err as ApiError

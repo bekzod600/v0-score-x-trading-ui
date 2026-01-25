@@ -9,17 +9,19 @@ interface HalalBadgesProps {
   size?: "sm" | "md"
   className?: string
 }
+type BackendIslamiclyStatus = "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
+type BackendMusaffaStatus = "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
 
-const islamiclyConfig: Record<IslamiclyStatus, { label: string; className: string }> = {
-  compliant: { label: "Compliant", className: "border-success/50 text-success bg-success/10" },
-  "non-compliant": { label: "Non-Compliant", className: "border-destructive/50 text-destructive bg-destructive/10" },
-  unknown: { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" },
+const islamiclyConfig: Record<BackendIslamiclyStatus, { label: string; className: string }> = {
+  COMPLIANT: { label: "Compliant", className: "border-success/50 text-success bg-success/10" },
+  NON_COMPLIANT: { label: "Non-Compliant", className: "border-destructive/50 text-destructive bg-destructive/10" },
+  NOT_COVERED: { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" },
 }
 
-const musaffaConfig: Record<MusaffaStatus, { label: string; className: string }> = {
-  halal: { label: "Halal", className: "border-success/50 text-success bg-success/10" },
-  "not-halal": { label: "Not Halal", className: "border-destructive/50 text-destructive bg-destructive/10" },
-  unknown: { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" },
+const musaffaConfig: Record<BackendMusaffaStatus, { label: string; className: string }> = {
+  COMPLIANT: { label: "Halal", className: "border-success/50 text-success bg-success/10" },
+  NON_COMPLIANT: { label: "Not Halal", className: "border-destructive/50 text-destructive bg-destructive/10" },
+  NOT_COVERED: { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" },
 }
 
 const defaultConfig = { label: "Unknown", className: "border-muted-foreground/50 text-muted-foreground bg-muted" }

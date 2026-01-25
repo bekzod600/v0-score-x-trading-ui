@@ -138,7 +138,7 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
 
   return (
     <>
-      <Card className="overflow-hidden border-border bg-card">
+      <Card className="overflow-hidden border-border bg-card !py-0 !gap-0">
         <SellerHeader trader={signal.trader as any} />
 
         <CardContent className="p-4">

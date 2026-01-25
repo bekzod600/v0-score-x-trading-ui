@@ -11,13 +11,38 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import {
-  type FilterState,
-  type SignalStatus,
-  type SavedFilter,
-  defaultFilters,
-  mockSavedFilters,
-} from "@/lib/mock-data"
+// Filter types - defined locally, no mock-data dependency
+export type SignalStatus = "WAITING_ENTRY" | "ACTIVE" | "TP1_HIT" | "TP2_HIT" | "SL_HIT" | "HOLD" | "CANCEL"
+
+export interface FilterState {
+  priceType: "all" | "free" | "paid" | "discounted"
+  islamiclyStatus: "any" | "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
+  musaffaStatus: "any" | "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
+  minScoreXPoints: number
+  minStars: number
+  minProfitPercent: number
+  maxLossPercent: number
+  maxRiskRatio: number
+  statuses: SignalStatus[]
+}
+
+export interface SavedFilter {
+  id: string
+  name: string
+  filters: FilterState
+}
+
+export const defaultFilters: FilterState = {
+  priceType: "all",
+  islamiclyStatus: "any",
+  musaffaStatus: "any",
+  minScoreXPoints: 0,
+  minStars: 0,
+  minProfitPercent: 0,
+  maxLossPercent: 100,
+  maxRiskRatio: 10,
+  statuses: [],
+}
 
 interface SignalFiltersProps {
   filters: FilterState
@@ -37,7 +62,7 @@ const statusOptions: { value: SignalStatus; label: string }[] = [
 ]
 
 export function SignalFilters({ filters, onFiltersChange, activeTab, className }: SignalFiltersProps) {
-  const [savedFilters] = useState<SavedFilter[]>(mockSavedFilters)
+  const [savedFilters] = useState<SavedFilter[]>([])
 
   const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
     onFiltersChange({ ...filters, [key]: value })
