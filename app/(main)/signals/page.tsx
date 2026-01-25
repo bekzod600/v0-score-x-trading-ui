@@ -17,14 +17,13 @@ import {
 } from "@/components/ui/dialog"
 import { SignalCard } from "@/components/signals/signal-card"
 import { SignalTabs } from "@/components/signals/signal-tabs"
-import { SignalFilters, ActiveFilterChips } from "@/components/signals/signal-filters"
+import { SignalFilters, ActiveFilterChips, type FilterState, type SignalStatus, defaultFilters } from "@/components/signals/signal-filters"
 import { EmptyState } from "@/components/ui/empty-state"
 import { SkeletonCard } from "@/components/ui/skeleton-card"
 import { useI18n } from "@/lib/i18n-context"
 import { useUser } from "@/lib/user-context"
 import { listSignals, type ApiSignal } from "@/lib/services/signals-service"
 import { listFilters, createFilter, type SavedFilter } from "@/lib/services/filters-service"
-import { type FilterState, type SignalStatus, defaultFilters } from "@/lib/mock-data"
 
 function calculatePotentialProfitFromApi(signal: ApiSignal): number {
   if (!signal.entry || !signal.tp2) return 0
@@ -70,7 +69,8 @@ function SignalsContent() {
       const response = await listSignals({ tab: activeTab })
       // Check if this request was cancelled/superseded
       if (ignoreRef?.current) return
-      setSignals(Array.isArray(response?.signals) ? response.signals : [])
+      const signalsToSet = Array.isArray(response?.signals) ? response.signals : []
+      setSignals(signalsToSet)
     } catch (err: any) {
       // Ignore errors from cancelled requests
       if (ignoreRef?.current) return

@@ -1,5 +1,4 @@
 import { apiRequest } from "@/lib/api-client"
-import type { mockSignals } from "@/lib/mock-data"
 
 // Types matching backend response structure
 export interface ApiTrader {
@@ -49,42 +48,6 @@ export interface BuySignalResponse {
   success: boolean
   message: string
   newBalance?: number
-}
-
-function mockToApiSignal(signal: (typeof mockSignals)[0]): ApiSignal {
-  return {
-    id: signal.id,
-    ticker: signal.isFree || signal.isPurchased ? signal.ticker : null,
-    entry: signal.isFree || signal.isPurchased ? signal.entry : null,
-    tp1: signal.isFree || signal.isPurchased ? signal.tp1 : null,
-    tp2: signal.isFree || signal.isPurchased ? signal.tp2 : null,
-    sl: signal.isFree || signal.isPurchased ? signal.sl : null,
-    currentPrice: signal.currentPrice,
-    status: signal.status as ApiSignal["status"],
-    isFree: signal.isFree,
-    price: signal.price,
-    discountPercent: signal.discountPercent,
-    islamiclyStatus: signal.islamiclyStatus as ApiSignal["islamiclyStatus"],
-    musaffaStatus: signal.musaffaStatus as ApiSignal["musaffaStatus"],
-    trader: {
-      id: signal.trader.id,
-      username: signal.trader.username,
-      avatar: signal.trader.avatar,
-      scoreXPoints: signal.trader.scoreXPoints,
-      rank: signal.trader.rank,
-      avgStars: signal.trader.avgStars,
-      totalPLPercent: signal.trader.totalPLPercent,
-      totalSignals: signal.trader.totalSignals,
-      subscribers: signal.trader.subscribers,
-      avgDaysToResult: signal.trader.avgDaysToResult,
-    },
-    likes: signal.likes,
-    dislikes: signal.dislikes,
-    createdAt: signal.createdAt,
-    closedAt: signal.closedAt,
-    isLocked: !signal.isFree && !signal.isPurchased,
-    isPurchased: signal.isPurchased,
-  }
 }
 
 // Raw API response format (snake_case from backend)
@@ -141,6 +104,70 @@ interface RawApiTrader {
 }
 
 /**
+ * Parse a value to number, handling strings like "190.00"
+ */
+function toNumber(val: unknown): number {
+  if (val === null || val === undefined) return 0
+  if (typeof val === "number") return val
+  if (typeof val === "string") {
+    const parsed = parseFloat(val)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
+function toNumberOrNull(val: unknown): number | null {
+  if (val === null || val === undefined) return null
+  if (typeof val === "number") return val
+  if (typeof val === "string") {
+    const parsed = parseFloat(val)
+    return isNaN(parsed) ? null : parsed
+  }
+  return null
+}
+
+/**
+ * Map backend status to frontend status
+ * Backend may use different status strings like "WAIT_EP" instead of "WAITING_ENTRY"
+ */
+function normalizeStatus(status: string | undefined | null): ApiSignal["status"] {
+  if (!status) return "WAITING_ENTRY"
+  const statusMap: Record<string, ApiSignal["status"]> = {
+    "WAIT_EP": "WAITING_ENTRY",
+    "WAITING_ENTRY": "WAITING_ENTRY",
+    "ACTIVE": "ACTIVE",
+    "TP1_HIT": "TP1_HIT",
+    "TP2_HIT": "TP2_HIT",
+    "SL_HIT": "SL_HIT",
+    "HOLD": "HOLD",
+    "CANCEL": "CANCEL",
+    "CANCELLED": "CANCEL",
+  }
+  return statusMap[status.toUpperCase()] || "WAITING_ENTRY"
+}
+
+// Status mapper function qo'shamiz
+function mapIslamiclyStatus(status: string | undefined): ApiSignal["islamiclyStatus"] {
+  const normalized = (status || "").toUpperCase()
+  switch (normalized) {
+    case "COMPLIANT": return "COMPLIANT"
+    case "NON_COMPLIANT": return "NON_COMPLIANT"
+    case "NOT_COVERED":
+    default: return "NOT_COVERED"
+  }
+}
+
+function mapMusaffaStatus(status: string | undefined): ApiSignal["musaffaStatus"] {
+  const normalized = (status || "").toUpperCase()
+  switch (normalized) {
+    case "COMPLIANT": return "COMPLIANT"
+    case "NON_COMPLIANT": return "NON_COMPLIANT"
+    case "NOT_COVERED":
+    default: return "NOT_COVERED"
+  }
+}
+
+/**
  * Transform raw API response (snake_case) to frontend format (camelCase)
  */
 function normalizeSignal(raw: RawApiSignal): ApiSignal {
@@ -152,31 +179,31 @@ function normalizeSignal(raw: RawApiSignal): ApiSignal {
   return {
     id: raw.id,
     ticker: raw.ticker || null,
-    entry: raw.entry ?? raw.ep ?? null,
-    tp1: raw.tp1 ?? null,
-    tp2: raw.tp2 ?? null,
-    sl: raw.sl ?? null,
-    currentPrice: raw.currentPrice ?? raw.current_price ?? 0,
-    status: (raw.status || "WAITING_ENTRY") as ApiSignal["status"],
+    entry: toNumberOrNull(raw.entry ?? raw.ep),
+    tp1: toNumberOrNull(raw.tp1),
+    tp2: toNumberOrNull(raw.tp2),
+    sl: toNumberOrNull(raw.sl),
+    currentPrice: toNumber(raw.currentPrice ?? raw.current_price),
+    status: normalizeStatus(raw.status),
     isFree,
-    price: raw.price ?? 0,
-    discountPercent: raw.discountPercent ?? raw.discount_percent ?? 0,
-    islamiclyStatus: (raw.islamiclyStatus ?? raw.islamicly_status ?? "NOT_COVERED") as ApiSignal["islamiclyStatus"],
-    musaffaStatus: (raw.musaffaStatus ?? raw.musaffa_status ?? "NOT_COVERED") as ApiSignal["musaffaStatus"],
+    price: toNumber(raw.price),
+    discountPercent: toNumber(raw.discountPercent ?? raw.discount_percent),
+    islamiclyStatus: mapIslamiclyStatus(raw.islamiclyStatus ?? raw.islamicly_status),
+    musaffaStatus: mapMusaffaStatus(raw.musaffaStatus ?? raw.musaffa_status),
     trader: {
       id: trader.id || "",
       username: trader.username || "Unknown",
       avatar: trader.avatar || "",
-      scoreXPoints: trader.scoreXPoints ?? trader.score_x_points ?? 0,
-      rank: trader.rank ?? 0,
-      avgStars: trader.avgStars ?? trader.avg_stars ?? 0,
-      totalPLPercent: trader.totalPLPercent ?? trader.total_pl_percent ?? 0,
-      totalSignals: trader.totalSignals ?? trader.total_signals ?? 0,
-      subscribers: trader.subscribers ?? 0,
-      avgDaysToResult: trader.avgDaysToResult ?? trader.avg_days_to_result ?? 0,
+      scoreXPoints: toNumber(trader.scoreXPoints ?? trader.score_x_points),
+      rank: toNumber(trader.rank),
+      avgStars: toNumber(trader.avgStars ?? trader.avg_stars),
+      totalPLPercent: toNumber(trader.totalPLPercent ?? trader.total_pl_percent),
+      totalSignals: toNumber(trader.totalSignals ?? trader.total_signals),
+      subscribers: toNumber(trader.subscribers),
+      avgDaysToResult: toNumber(trader.avgDaysToResult ?? trader.avg_days_to_result),
     },
-    likes: raw.likes ?? 0,
-    dislikes: raw.dislikes ?? 0,
+    likes: toNumber(raw.likes),
+    dislikes: toNumber(raw.dislikes),
     createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
     closedAt: raw.closedAt ?? raw.closed_at ?? null,
     isLocked,

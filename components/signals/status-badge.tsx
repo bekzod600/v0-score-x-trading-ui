@@ -1,21 +1,25 @@
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { SignalStatus } from "@/lib/mock-data"
+
+// Define SignalStatus locally to avoid mock-data dependency
+type SignalStatus = "WAITING_ENTRY" | "ACTIVE" | "TP1_HIT" | "TP2_HIT" | "SL_HIT" | "HOLD" | "CANCEL" | "WAIT_EP"
 
 interface StatusBadgeProps {
-  status: SignalStatus
+  status: SignalStatus | string
   size?: "sm" | "md" | "lg"
   className?: string
 }
 
-const statusConfig: Record<SignalStatus, { label: string; className: string }> = {
+const statusConfig: Record<string, { label: string; className: string }> = {
   WAITING_ENTRY: { label: "Waiting Entry", className: "bg-warning/15 text-warning border-warning/30" },
+  WAIT_EP: { label: "Waiting Entry", className: "bg-warning/15 text-warning border-warning/30" },
   ACTIVE: { label: "Active", className: "bg-primary/15 text-primary border-primary/30" },
   TP1_HIT: { label: "TP1 Hit", className: "bg-success/15 text-success border-success/30" },
   TP2_HIT: { label: "TP2 Hit", className: "bg-success/15 text-success border-success/30" },
   SL_HIT: { label: "SL Hit", className: "bg-destructive/15 text-destructive border-destructive/30" },
   HOLD: { label: "Hold", className: "bg-muted text-muted-foreground border-border" },
   CANCEL: { label: "Cancelled", className: "bg-muted text-muted-foreground border-border" },
+  CANCELLED: { label: "Cancelled", className: "bg-muted text-muted-foreground border-border" },
 }
 
 const defaultConfig = { label: "Unknown", className: "bg-muted text-muted-foreground border-border" }
