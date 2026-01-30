@@ -290,3 +290,127 @@ export async function buySignal(id: string, token: string): Promise<BuySignalRes
     timeoutMs: 15000,
   })
 }
+
+/**
+ * Fetch traders leaderboard
+ * GET /traders or GET /leaderboard
+ * No mock data fallback - throws on API error
+ */
+export async function listTraders(params?: {
+  sortBy?: "scorex" | "profit" | "stars"
+  page?: number
+  limit?: number
+}): Promise<{ traders: ApiTrader[]; total: number }> {
+  const searchParams = new URLSearchParams()
+  if (params?.sortBy) searchParams.set("sortBy", params.sortBy)
+  if (params?.page) searchParams.set("page", String(params.page))
+  if (params?.limit) searchParams.set("limit", String(params.limit))
+
+  const query = searchParams.toString()
+  const path = `/traders${query ? `?${query}` : ""}`
+
+  const response = await apiRequest<ApiTrader[] | { traders: ApiTrader[]; total?: number }>({
+    method: "GET",
+    path,
+    timeoutMs: 10000,
+  })
+
+  if (Array.isArray(response)) {
+    return { traders: response, total: response.length }
+  }
+
+  return {
+    traders: response.traders || [],
+    total: response.total ?? (response.traders?.length || 0),
+  }
+}
+
+/**
+ * Fetch trader profile by username
+ * GET /traders/:username or GET /users/:username
+ * No mock data fallback - throws on API error
+ */
+export async function getTraderByUsername(username: string): Promise<ApiTrader> {
+  return await apiRequest<ApiTrader>({
+    method: "GET",
+    path: `/traders/${username}`,
+    timeoutMs: 10000,
+  })
+}
+
+/**
+ * Fetch signals by trader
+ * GET /traders/:username/signals
+ * No mock data fallback - throws on API error
+ */
+export async function getTraderSignals(username: string, params?: {
+  tab?: "live" | "results"
+}): Promise<SignalsListResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.tab) searchParams.set("tab", params.tab)
+  
+  const query = searchParams.toString()
+  const path = `/traders/${username}/signals${query ? `?${query}` : ""}`
+
+  const response = await apiRequest<RawApiSignal[] | { signals: RawApiSignal[]; total?: number }>({
+    method: "GET",
+    path,
+    timeoutMs: 10000,
+  })
+
+  let rawSignals: RawApiSignal[] = []
+  let total = 0
+  
+  if (Array.isArray(response)) {
+    rawSignals = response
+    total = response.length
+  } else if (response && typeof response === "object") {
+    rawSignals = Array.isArray(response.signals) ? response.signals : []
+    total = response.total ?? rawSignals.length
+  }
+
+  const signals = rawSignals
+    .filter((s): s is RawApiSignal => s !== null && s !== undefined && typeof s === "object" && "id" in s)
+    .map(normalizeSignal)
+
+  return { signals, total, page: 1, limit: 50 }
+}
+
+/**
+ * Fetch user's own signals (requires auth)
+ * GET /me/signals
+ * No mock data fallback - throws on API error
+ */
+export async function getMySignals(token: string, params?: {
+  tab?: "live" | "results"
+}): Promise<SignalsListResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.tab) searchParams.set("tab", params.tab)
+  
+  const query = searchParams.toString()
+  const path = `/me/signals${query ? `?${query}` : ""}`
+
+  const response = await apiRequest<RawApiSignal[] | { signals: RawApiSignal[]; total?: number }>({
+    method: "GET",
+    path,
+    token,
+    timeoutMs: 10000,
+  })
+
+  let rawSignals: RawApiSignal[] = []
+  let total = 0
+  
+  if (Array.isArray(response)) {
+    rawSignals = response
+    total = response.length
+  } else if (response && typeof response === "object") {
+    rawSignals = Array.isArray(response.signals) ? response.signals : []
+    total = response.total ?? rawSignals.length
+  }
+
+  const signals = rawSignals
+    .filter((s): s is RawApiSignal => s !== null && s !== undefined && typeof s === "object" && "id" in s)
+    .map(normalizeSignal)
+
+  return { signals, total, page: 1, limit: 50 }
+}

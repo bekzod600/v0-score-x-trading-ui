@@ -2,12 +2,24 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { mockTraders, mockSignals, type Trader } from "./mock-data"
 import { apiRequest, type ApiError } from "./api-client"
 
 const TOKEN_STORAGE_KEY = "scorex_token"
 
 // Types
+export interface Trader {
+  id: string
+  username: string
+  avatar: string
+  scoreXPoints: number
+  rank: number
+  avgStars: number
+  totalPLPercent: number
+  totalSignals: number
+  subscribers: number
+  avgDaysToResult?: number
+}
+
 export interface UserProfile {
   id: string
   username: string
@@ -51,8 +63,6 @@ interface UserState {
 
 interface UserContextType extends UserState {
   // Auth
-  login: (email: string, password: string) => Promise<boolean>
-  register: (email: string, password: string, username: string) => Promise<boolean>
   logout: () => void
   setToken: (token: string | null) => void
   hydrateAuth: () => Promise<void>
@@ -76,26 +86,24 @@ interface UserContextType extends UserState {
   getVote: (signalId: string) => "like" | "dislike" | null
   // Getters
   getTraderWithUpdatedStats: (trader: Trader) => Trader
-  getFavoriteSignals: () => typeof mockSignals
-  getUserSignals: () => typeof mockSignals
 }
 
 const UserContext = createContext<UserContextType | null>(null)
 
-// Mock current user based on first trader
+// Default empty profile for unauthenticated users
 const initialProfile: UserProfile = {
-  id: mockTraders[0].id,
-  username: mockTraders[0].username,
-  displayName: mockTraders[0].username,
-  bio: "Professional trader specializing in tech stocks. 5+ years of experience.",
-  avatar: mockTraders[0].avatar,
-  scoreXPoints: mockTraders[0].scoreXPoints,
-  rank: mockTraders[0].rank,
-  avgStars: mockTraders[0].avgStars,
-  totalStarCount: 156,
-  totalPLPercent: mockTraders[0].totalPLPercent,
-  totalSignals: mockTraders[0].totalSignals,
-  subscribers: mockTraders[0].subscribers,
+  id: "",
+  username: "",
+  displayName: "",
+  bio: "",
+  avatar: "/placeholder-user.jpg",
+  scoreXPoints: 0,
+  rank: 0,
+  avgStars: 0,
+  totalStarCount: 0,
+  totalPLPercent: 0,
+  totalSignals: 0,
+  subscribers: 0,
 }
 
 const initialState: UserState = {
@@ -212,17 +220,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     },
     [state.isHydrating, state.isLoggedIn, router],
   )
-
-  const login = useCallback(async (_email: string, _password: string): Promise<boolean> => {
-    // Backend uses Telegram auth, not email/password
-    // This will be replaced with real Telegram login in Patch 2
-    return false
-  }, [])
-
-  const register = useCallback(async (_email: string, _password: string, _username: string): Promise<boolean> => {
-    // Backend uses Telegram auth, not email/password registration
-    return false
-  }, [])
 
   const logout = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -364,20 +361,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
     [state.ratings],
   )
 
-  const getFavoriteSignals = useCallback(() => {
-    return mockSignals.filter((s) => state.favorites.includes(s.id))
-  }, [state.favorites])
-
-  const getUserSignals = useCallback(() => {
-    return mockSignals.filter((s) => s.trader.id === state.profile.id)
-  }, [state.profile.id])
-
   return (
     <UserContext.Provider
       value={{
         ...state,
-        login,
-        register,
         logout,
         setToken,
         hydrateAuth,
@@ -395,8 +382,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         voteSignal,
         getVote,
         getTraderWithUpdatedStats,
-        getFavoriteSignals,
-        getUserSignals,
       }}
     >
       {children}

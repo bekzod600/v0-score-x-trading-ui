@@ -1,7 +1,9 @@
 import { Shield, CheckCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import type { IslamiclyStatus, MusaffaStatus } from "@/lib/mock-data"
+
+type IslamiclyStatus = "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
+type MusaffaStatus = "COMPLIANT" | "NON_COMPLIANT" | "NOT_COVERED"
 
 interface HalalBadgesProps {
   islamiclyStatus: IslamiclyStatus

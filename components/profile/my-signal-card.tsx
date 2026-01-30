@@ -18,9 +18,33 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { StatusBadge } from "@/components/signals/status-badge"
-import { type Signal, getFinalPrice } from "@/lib/mock-data"
 import { useWallet } from "@/lib/wallet-context"
 import { formatDistanceToNow } from "date-fns"
+
+// Define Signal type locally to avoid mock-data dependency
+interface Signal {
+  id: string
+  ticker: string | null
+  entry: number | null
+  tp1: number | null
+  tp2: number | null
+  sl: number | null
+  currentPrice: number
+  status: string
+  isFree: boolean
+  price: number
+  discountPercent: number
+  createdAt: string
+  closedAt?: string | null
+}
+
+function getFinalPrice(signal: Signal): number {
+  if (signal.isFree) return 0
+  if (signal.discountPercent > 0) {
+    return Math.round(signal.price * (1 - signal.discountPercent / 100))
+  }
+  return signal.price
+}
 
 interface MySignalCardProps {
   signal: Signal

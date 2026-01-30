@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/lib/toast-context"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
-import { mockSignals } from "@/lib/mock-data"
+import { getMySignals, type ApiSignal } from "@/lib/services/signals-service"
 
 interface FormErrors {
   ticker?: string
@@ -37,7 +37,7 @@ interface TickerValidation {
 export default function AddSignalPage() {
   const router = useRouter()
   const { showToast } = useToast()
-  const { isLoggedIn, profile, getUserSignals } = useUser()
+  const { isLoggedIn, profile, token } = useUser()
   const { t } = useI18n()
 
   // Form state
@@ -51,6 +51,8 @@ export default function AddSignalPage() {
   const [discount, setDiscount] = useState("")
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [userSignals, setUserSignals] = useState<ApiSignal[]>([])
+  const [isLoadingSignals, setIsLoadingSignals] = useState(true)
 
   // Ticker validation state
   const [tickerValidation, setTickerValidation] = useState<TickerValidation>({
@@ -67,7 +69,26 @@ export default function AddSignalPage() {
     }
   }, [isLoggedIn, router])
 
-  const userSignals = getUserSignals()
+  // Fetch user's signals from API
+  useEffect(() => {
+    async function fetchUserSignals() {
+      if (!token) {
+        setIsLoadingSignals(false)
+        return
+      }
+      try {
+        const response = await getMySignals(token)
+        setUserSignals(response.signals)
+      } catch {
+        // Silently fail - user can still create signals
+        setUserSignals([])
+      } finally {
+        setIsLoadingSignals(false)
+      }
+    }
+    fetchUserSignals()
+  }, [token])
+
   const freeSignalsCount = userSignals.filter((s) => s.isFree).length
   const scoreXPoints = profile.scoreXPoints
 
@@ -77,13 +98,12 @@ export default function AddSignalPage() {
   const hasDuplicateActiveTicker = useMemo(() => {
     if (!ticker) return false
     const normalizedTicker = ticker.toUpperCase().trim()
-    return mockSignals.some(
+    return userSignals.some(
       (s) =>
-        s.ticker.toUpperCase() === normalizedTicker &&
-        (s.status === "ACTIVE" || s.status === "WAITING_ENTRY") &&
-        s.trader.id === profile.id,
+        s.ticker?.toUpperCase() === normalizedTicker &&
+        (s.status === "ACTIVE" || s.status === "WAITING_ENTRY"),
     )
-  }, [ticker, profile.id])
+  }, [ticker, userSignals])
 
   const entryNum = Number.parseFloat(entry) || 0
   const slNum = Number.parseFloat(sl) || 0

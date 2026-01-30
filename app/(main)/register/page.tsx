@@ -1,45 +1,20 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { UserPlus, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
-import { useToast } from "@/lib/toast-context"
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register } = useUser()
   const { t } = useI18n()
-  const { showToast } = useToast()
-  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    const success = register("", "", "")
-    if (success) {
-      showToast("Account created successfully!", "success")
-      router.push("/")
-    } else {
-      console.log("Registration failed. Please try again.")
-    }
-  }
-
-  const handleTelegramRegister = async () => {
-    setLoading(true)
-    // TODO: Implement real Telegram login in Patch 2
+  const handleTelegramRegister = () => {
     // Registration happens automatically on first Telegram login
-    setTimeout(() => {
-      setLoading(false)
-    }, 500)
+    // Redirect to login page
+    router.push("/login")
   }
 
   return (
@@ -66,9 +41,9 @@ export default function RegisterPage() {
             </ul>
           </div>
 
-          <Button onClick={handleTelegramRegister} className="w-full gap-2" disabled={loading} size="lg">
+          <Button onClick={handleTelegramRegister} className="w-full gap-2" size="lg">
             <MessageCircle className="h-5 w-5" />
-            {loading ? t("misc.loading") : "Sign up with Telegram"}
+            Sign up with Telegram
           </Button>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
