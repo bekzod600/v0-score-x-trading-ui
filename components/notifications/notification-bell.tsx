@@ -26,7 +26,7 @@ export function NotificationBell() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = notifications?.filter((n) => !n.read).length || 0
 
   const fetchNotifications = useCallback(async () => {
     if (!token) return
@@ -36,9 +36,10 @@ export function NotificationBell() {
 
     try {
       const response = await listNotifications(token)
-      setNotifications(response.notifications)
+      setNotifications(response?.notifications || [])
     } catch (err) {
       console.error("[v0] Failed to fetch notifications:", err)
+      setNotifications([])
       setError("Failed to load")
     } finally {
       setIsLoading(false)

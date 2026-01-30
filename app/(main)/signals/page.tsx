@@ -75,7 +75,7 @@ function SignalsContent() {
       // Ignore errors from cancelled requests
       if (ignoreRef?.current) return
       if (err?.message === "Request cancelled") return
-      console.error("[v0] Failed to fetch signals:", err)
+      // Error handled below
       setError(err?.message || "Failed to load signals. Please try again.")
       setSignals([])
     } finally {
@@ -91,9 +91,10 @@ function SignalsContent() {
     setSavedFiltersLoading(true)
     try {
       const response = await listFilters(token)
-      setSavedFilters(response.filters)
-    } catch (err) {
-      console.error("[v0] Failed to fetch saved filters:", err)
+      setSavedFilters(response?.filters || [])
+    } catch {
+      // Silently fail for saved filters
+      setSavedFilters([])
     } finally {
       setSavedFiltersLoading(false)
     }
@@ -123,8 +124,8 @@ function SignalsContent() {
       setSavedFilters((prev) => [...prev, response.filter])
       setNewFilterName("")
       setSaveFilterDialogOpen(false)
-    } catch (err) {
-      console.error("[v0] Failed to save filter:", err)
+    } catch {
+      // Silently fail for save filter
     } finally {
       setSavingFilter(false)
     }
@@ -194,15 +195,8 @@ function SignalsContent() {
 
   const mapApiSignalToCard = (apiSignal: ApiSignal) => {
     if (!apiSignal || !apiSignal.id) {
-      console.error('[v0] Invalid signal:', apiSignal)
       return null
     }
-    console.log('[v0] Mapping signal:', {
-      id: apiSignal.id,
-      ticker: apiSignal.ticker,
-      islamicly: apiSignal.islamiclyStatus,
-      musaffa: apiSignal.musaffaStatus
-    })
     const trader = apiSignal.trader || {}
     return {
       id: apiSignal.id,

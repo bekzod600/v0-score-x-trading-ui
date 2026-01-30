@@ -41,3 +41,35 @@ export async function getTelegramStatus(loginId: string): Promise<TelegramStatus
     path: `/auth/telegram/status/${loginId}`,
   })
 }
+
+/**
+ * Get current authenticated user info
+ * GET /auth/me
+ * Requires authentication token
+ */
+export async function getCurrentUser(token: string): Promise<{
+  id: string
+  username: string
+  displayName?: string
+  avatar?: string
+  scoreXPoints?: number
+}> {
+  return apiRequest({
+    method: "GET",
+    path: "/auth/me",
+    token,
+  })
+}
+
+/**
+ * Logout (invalidate token)
+ * POST /auth/logout
+ * Requires authentication token
+ */
+export async function logout(token: string): Promise<{ success: boolean }> {
+  return apiRequest({
+    method: "POST",
+    path: "/auth/logout",
+    token,
+  })
+}

@@ -1,17 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Trophy, Star, ChevronDown, Users, GraduationCap, MapPin, Calendar } from "lucide-react"
+import { Trophy, Star, ChevronDown, Users, GraduationCap, MapPin, Calendar, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EmptyState } from "@/components/ui/empty-state"
 import { cn } from "@/lib/utils"
-import { mockTraders } from "@/lib/mock-data"
 import { useAdmin } from "@/lib/admin-context"
+import { listTraders, type ApiTrader } from "@/lib/services/signals-service"
 
 type TraderSortBy = "scorex" | "profit" | "stars"
 type CenterSortBy = "rating" | "students" | "newest"
@@ -30,13 +30,34 @@ export default function RatingPage() {
 
   const [traderSortBy, setTraderSortBy] = useState<TraderSortBy>("scorex")
   const [centerSortBy, setCenterSortBy] = useState<CenterSortBy>("rating")
+  const [traders, setTraders] = useState<ApiTrader[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const { trainingCenters } = useAdmin()
+
+  // Fetch traders from API
+  useEffect(() => {
+    async function fetchTraders() {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const response = await listTraders({ sortBy: traderSortBy })
+        setTraders(response.traders)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load traders")
+        setTraders([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchTraders()
+  }, [traderSortBy])
 
   // Filter only approved centers
   const approvedCenters = trainingCenters.filter((c) => c.status === "approved")
 
-  const sortedTraders = [...mockTraders].sort((a, b) => {
+  const sortedTraders = [...traders].sort((a, b) => {
     switch (traderSortBy) {
       case "profit":
         return b.totalPLPercent - a.totalPLPercent
@@ -129,7 +150,17 @@ export default function RatingPage() {
             </DropdownMenu>
           </div>
 
-          {sortedTraders.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading traders...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <p className="text-sm text-destructive">{error}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
+            </div>
+          ) : sortedTraders.length === 0 ? (
             <EmptyState
               icon={Users}
               title="No traders yet"

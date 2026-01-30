@@ -1,29 +1,75 @@
 "use client"
 
-import { use } from "react"
+import { use, useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Trophy, TrendingUp, Users } from "lucide-react"
+import { ArrowLeft, Trophy, TrendingUp, Users, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SignalCard } from "@/components/signals/signal-card"
 import { StarRating } from "@/components/profile/star-rating"
 import { SubscribeButton } from "@/components/profile/subscribe-button"
-import { mockTraders, mockSignals } from "@/lib/mock-data"
 import { useSearchParams } from "next/navigation"
+import { getTraderByUsername, getTraderSignals, type ApiTrader, type ApiSignal } from "@/lib/services/signals-service"
 
 export default function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params)
   const searchParams = useSearchParams()
   const tab = searchParams.get("tab") || "live"
 
-  const trader = mockTraders.find((t) => t.username.toLowerCase() === username.toLowerCase()) || mockTraders[0]
-  const traderSignals = mockSignals.filter((s) => s.trader.id === trader.id)
+  const [trader, setTrader] = useState<ApiTrader | null>(null)
+  const [signals, setSignals] = useState<ApiSignal[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const liveSignals = traderSignals.filter((s) => ["WAITING_ENTRY", "ACTIVE"].includes(s.status))
-  const resultSignals = traderSignals.filter((s) =>
+  useEffect(() => {
+    async function fetchTraderData() {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const [traderData, signalsData] = await Promise.all([
+          getTraderByUsername(username),
+          getTraderSignals(username),
+        ])
+        setTrader(traderData)
+        setSignals(signalsData.signals)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load trader profile")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchTraderData()
+  }, [username])
+
+  const liveSignals = signals.filter((s) => ["WAITING_ENTRY", "ACTIVE"].includes(s.status))
+  const resultSignals = signals.filter((s) =>
     ["TP1_HIT", "TP2_HIT", "SL_HIT", "HOLD", "CANCEL"].includes(s.status),
   )
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4 py-6">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading trader profile...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !trader) {
+    return (
+      <div className="container mx-auto flex min-h-[60vh] items-center justify-center px-4 py-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <p className="text-destructive">{error || "Trader not found"}</p>
+          <Link href="/rating" className="text-primary hover:underline">
+            Back to Leaderboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">
