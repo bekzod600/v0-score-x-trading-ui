@@ -91,9 +91,10 @@ function SignalsContent() {
     setSavedFiltersLoading(true)
     try {
       const response = await listFilters(token)
-      setSavedFilters(response.filters)
+      setSavedFilters(response?.filters || [])
     } catch {
       // Silently fail for saved filters
+      setSavedFilters([])
     } finally {
       setSavedFiltersLoading(false)
     }
