@@ -19,7 +19,7 @@ import { useUser } from "@/lib/user-context"
 import { useWallet } from "@/lib/wallet-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useSearchParams } from "next/navigation"
-import { getMySignals, type ApiSignal } from "@/lib/services/signals-service"
+import { getMySignals, getTraderByUsername, type ApiSignal, type ApiTrader } from "@/lib/services/signals-service"
 import { getMyFavorites } from "@/lib/services/favorites-service"
 
 function ProfileContent() {
@@ -40,6 +40,10 @@ function ProfileContent() {
   const [favoriteSignals, setFavoriteSignals] = useState<ApiSignal[]>([])
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
   const [favoritesError, setFavoritesError] = useState<string | null>(null)
+
+  // Full profile stats from API
+  const [profileStats, setProfileStats] = useState<ApiTrader | null>(null)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -71,6 +75,30 @@ function ProfileContent() {
     fetchUserSignals()
   }, [token])
 
+  // Fetch full profile stats from traders API
+  useEffect(() => {
+    async function fetchProfileStats() {
+      if (!token || !profile.username) {
+        setIsLoadingProfile(false)
+        return
+      }
+
+      try {
+        setIsLoadingProfile(true)
+        const traderData = await getTraderByUsername(profile.username)
+        setProfileStats(traderData)
+      } catch {
+        // Silently fail - just use default values from context
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+
+    if (profile.username) {
+      fetchProfileStats()
+    }
+  }, [token, profile.username])
+
   // Fetch favorites when tab is "favorites"
   useEffect(() => {
     async function fetchFavorites() {
@@ -82,10 +110,8 @@ function ProfileContent() {
         const response = await getMyFavorites(token)
         // Backend returns { signals: [...], total: number }
         setFavoriteSignals(response?.signals || [])
-      } catch (err) {
+      } catch {
         // Silently fail - show empty state instead of error
-        // Backend endpoint may not be fully implemented yet
-        console.error("Failed to fetch favorites:", err)
         setFavoriteSignals([])
       } finally {
         setIsLoadingFavorites(false)
@@ -99,6 +125,17 @@ function ProfileContent() {
     return null
   }
 
+  // Merge context profile with API stats (API takes priority)
+  const displayProfile = {
+    ...profile,
+    rank: profileStats?.rank ?? profile.rank ?? 0,
+    avgStars: profileStats?.avgStars ?? profile.avgStars ?? 0,
+    totalPLPercent: profileStats?.totalPLPercent ?? profile.totalPLPercent ?? 0,
+    totalSignals: profileStats?.totalSignals ?? profile.totalSignals ?? 0,
+    subscribers: profileStats?.subscribers ?? profile.subscribers ?? 0,
+    scoreXPoints: profileStats?.scoreXPoints ?? profile.scoreXPoints ?? 0,
+  }
+
   // Favorites count - use loaded data if available, otherwise context
   const favoritesCount = favoriteSignals.length || favorites?.length || 0
 
@@ -110,27 +147,37 @@ function ProfileContent() {
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex flex-col items-center gap-4 sm:flex-row">
               <Avatar className="h-20 w-20 border-4 border-primary-foreground/20">
-                <AvatarImage src={profile.avatar || "/placeholder.svg"} alt={profile.username} />
-                <AvatarFallback className="text-2xl">{profile.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={displayProfile.avatar || "/placeholder.svg"} alt={displayProfile.username} />
+                <AvatarFallback className="text-2xl">
+                  {displayProfile.username ? displayProfile.username.slice(0, 2).toUpperCase() : "??"}
+                </AvatarFallback>
               </Avatar>
               <div className="text-center sm:text-left">
-                <h1 className="text-2xl font-bold text-primary-foreground">{profile.displayName}</h1>
+                <h1 className="text-2xl font-bold text-primary-foreground">
+                  {displayProfile.displayName || displayProfile.username || "User"}
+                </h1>
                 <p className="text-sm text-primary-foreground/80">
-                  @{profile.telegramUsername || profile.username.toLowerCase()}
+                  @{displayProfile.telegramUsername || (displayProfile.username || "user").toLowerCase()}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-primary-foreground/80 sm:justify-start">
-                  <span className="flex items-center gap-1">
-                    <Trophy className="h-4 w-4" />
-                    {profile.scoreXPoints} pts
-                  </span>
-                  <span>Rank #{profile.rank}</span>
-                  <span className="flex items-center gap-1">
-                    <Star className="h-4 w-4 fill-current" />
-                    {profile.avgStars.toFixed(1)}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <TrendingUp className="h-4 w-4" />+{profile.totalPLPercent}%
-                  </span>
+                  {isLoadingProfile ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-1">
+                        <Trophy className="h-4 w-4" />
+                        {displayProfile.scoreXPoints} pts
+                      </span>
+                      <span>Rank #{displayProfile.rank || "—"}</span>
+                      <span className="flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-current" />
+                        {displayProfile.avgStars.toFixed(1)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <TrendingUp className="h-4 w-4" />+{displayProfile.totalPLPercent}%
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -159,19 +206,27 @@ function ProfileContent() {
         <CardContent className="p-6">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div className="text-center">
-              <div className="text-2xl font-bold">{profile.totalSignals}</div>
+              <div className="text-2xl font-bold">
+                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : displayProfile.totalSignals}
+              </div>
               <div className="text-xs text-muted-foreground">Total Signals</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-success">+{profile.totalPLPercent}%</div>
+              <div className="text-2xl font-bold text-success">
+                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : `+${displayProfile.totalPLPercent}%`}
+              </div>
               <div className="text-xs text-muted-foreground">Total P/L</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{profile.scoreXPoints}</div>
+              <div className="text-2xl font-bold">
+                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : displayProfile.scoreXPoints}
+              </div>
               <div className="text-xs text-muted-foreground">ScoreX Points</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">{profile.subscribers}</div>
+              <div className="text-2xl font-bold">
+                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : displayProfile.subscribers}
+              </div>
               <div className="text-xs text-muted-foreground">Subscribers</div>
             </div>
           </div>
