@@ -115,7 +115,9 @@ function ProfileContent() {
               </Avatar>
               <div className="text-center sm:text-left">
                 <h1 className="text-2xl font-bold text-primary-foreground">{profile.displayName}</h1>
-                <p className="text-sm text-primary-foreground/80">@{profile.username.toLowerCase()}</p>
+                <p className="text-sm text-primary-foreground/80">
+                  @{profile.telegramUsername || profile.username.toLowerCase()}
+                </p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-primary-foreground/80 sm:justify-start">
                   <span className="flex items-center gap-1">
                     <Trophy className="h-4 w-4" />

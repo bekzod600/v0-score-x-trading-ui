@@ -41,6 +41,10 @@ export interface UserProfile {
   totalPLPercent: number
   totalSignals: number
   subscribers: number
+  // Telegram fields
+  telegramFirstName?: string
+  telegramLastName?: string
+  telegramUsername?: string
 }
 
 export interface Subscription {
@@ -205,8 +209,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
           ...(userData.id && { id: userData.id }),
           ...(userData.username && {
             username: userData.username,
-            displayName: userData.displayName || userData.username,
           }),
+          // Use telegram fields for display name
+          ...(userData.telegram_first_name && { telegramFirstName: userData.telegram_first_name }),
+          ...(userData.telegram_last_name && { telegramLastName: userData.telegram_last_name }),
+          ...(userData.telegram_username && { telegramUsername: userData.telegram_username }),
+          // Set displayName from telegram name or username
+          displayName: userData.telegram_first_name 
+            ? `${userData.telegram_first_name}${userData.telegram_last_name ? ' ' + userData.telegram_last_name : ''}`
+            : userData.displayName || userData.username || prev.profile.displayName,
           ...(userData.scoreXPoints !== undefined && { scoreXPoints: userData.scoreXPoints }),
           ...(userData.avatar && { avatar: userData.avatar }),
           ...(userData.bio && { bio: userData.bio }),
