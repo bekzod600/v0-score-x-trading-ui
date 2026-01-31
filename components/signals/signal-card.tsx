@@ -13,6 +13,7 @@ import { HalalBadges } from "./halal-badges"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
 import { LoginRequiredModal } from "@/components/auth/login-required-modal"
+import { voteSignal as voteSignalAPI, removeVote } from "@/lib/services/ratings-service"
 
 interface SignalCardSignal {
   id: string
@@ -97,12 +98,15 @@ function getResultOutcome(signal: SignalCardSignal): { type: "profit" | "loss" |
 }
 
 export function SignalCard({ signal, isResult = false }: SignalCardProps) {
-  const { isFavorite, toggleFavorite, voteSignal, getVote, isLoggedIn } = useUser()
+  const { isFavorite, toggleFavorite, getVote, isLoggedIn, token } = useUser()
   const { t } = useI18n()
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [isVoting, setIsVoting] = useState(false)
+  const [likes, setLikes] = useState(signal.likes)
+  const [dislikes, setDislikes] = useState(signal.dislikes)
+  const [userVote, setUserVote] = useState<"like" | "dislike" | null>(getVote(signal.id))
 
   const favorite = isFavorite(signal.id)
-  const userVote = getVote(signal.id)
 
   // Backend rule: isLocked = !isFree && !isPurchased
   // Premium status does NOT unlock signals
@@ -114,18 +118,35 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
   const finalPrice = getFinalPrice(signal)
   const outcome = isResult ? getResultOutcome(signal) : null
 
-  // Calculate display likes/dislikes based on user vote
-  let displayLikes = signal.likes
-  let displayDislikes = signal.dislikes
-  if (userVote === "like") displayLikes += 1
-  if (userVote === "dislike") displayDislikes += 1
-
-  const handleVote = (vote: "like" | "dislike") => {
+  const handleVote = async (voteType: "like" | "dislike") => {
     if (!isLoggedIn) {
       setShowLoginModal(true)
       return
     }
-    voteSignal(signal.id, vote)
+    if (!token || isVoting) return
+
+    setIsVoting(true)
+    try {
+      // If already voted same way, remove vote
+      if (userVote === voteType) {
+        await removeVote(signal.id, token)
+        setUserVote(null)
+        if (voteType === "like") setLikes(prev => prev - 1)
+        else setDislikes(prev => prev - 1)
+      } else {
+        // New vote or change vote
+        const result = await voteSignalAPI(signal.id, voteType, token)
+        
+        // Update counts from server response
+        setLikes(result.likes)
+        setDislikes(result.dislikes)
+        setUserVote(voteType)
+      }
+    } catch (err) {
+      // Silently fail - user can retry
+    } finally {
+      setIsVoting(false)
+    }
   }
 
   const handleFavorite = () => {
@@ -284,23 +305,25 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => handleVote("like")}
+                disabled={isVoting}
                 className={cn(
-                  "flex items-center gap-1 text-sm transition-colors",
+                  "flex items-center gap-1 text-sm transition-colors disabled:opacity-50",
                   userVote === "like" ? "text-success" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <ThumbsUp className={cn("h-4 w-4", userVote === "like" && "fill-current")} />
-                <span className="text-xs">{displayLikes}</span>
+                <span className="text-xs">{likes}</span>
               </button>
               <button
                 onClick={() => handleVote("dislike")}
+                disabled={isVoting}
                 className={cn(
-                  "flex items-center gap-1 text-sm transition-colors",
+                  "flex items-center gap-1 text-sm transition-colors disabled:opacity-50",
                   userVote === "dislike" ? "text-destructive" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <ThumbsDown className={cn("h-4 w-4", userVote === "dislike" && "fill-current")} />
-                <span className="text-xs">{displayDislikes}</span>
+                <span className="text-xs">{dislikes}</span>
               </button>
               <button
                 onClick={handleFavorite}
