@@ -136,6 +136,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
             <span className="font-medium">Trader Rating</span>
             <StarRating
               traderId={trader.id}
+              username={trader.username}
               avgStars={trader.avgStars}
               totalCount={156}
               size="lg"

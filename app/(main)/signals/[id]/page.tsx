@@ -1,8 +1,8 @@
 "use client"
 
-import { use, useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft,
   Lock,
@@ -63,8 +63,9 @@ function getFinalPrice(signal: ApiSignal): number {
   return signal.price
 }
 
-export default function SignalDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function SignalDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const { t } = useI18n()
   const { showToast } = useToast()
@@ -80,7 +81,16 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
   const [likes, setLikes] = useState(0)
   const [dislikes, setDislikes] = useState(0)
 
+  // Check if id is a valid UUID format (skip fetch for routes like "add")
+  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
   const fetchSignal = useCallback(async () => {
+    if (!isValidUuid) {
+      setIsLoading(false)
+      setError("Invalid signal ID")
+      return
+    }
+    
     setIsLoading(true)
     setError(null)
     try {
@@ -89,12 +99,11 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
       setLikes(data.likes)
       setDislikes(data.dislikes)
     } catch (err: any) {
-      console.error("[v0] Failed to fetch signal:", err)
       setError(err?.message || "Failed to load signal. Please try again.")
     } finally {
       setIsLoading(false)
     }
-  }, [id, token])
+  }, [id, token, isValidUuid])
 
   useEffect(() => {
     fetchSignal()

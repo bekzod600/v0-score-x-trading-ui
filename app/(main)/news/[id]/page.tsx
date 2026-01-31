@@ -1,14 +1,14 @@
 "use client"
 
-import { use } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Calendar, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAdmin } from "@/lib/admin-context"
 
-export default function NewsDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function NewsDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const { newsPosts } = useAdmin()
 

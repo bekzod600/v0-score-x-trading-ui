@@ -7,17 +7,19 @@ import { useUser } from "@/lib/user-context"
 
 interface StarRatingProps {
   traderId: string
+  username: string
   avgStars: number
   totalCount: number
   size?: "sm" | "md" | "lg"
   showRateButton?: boolean
 }
 
-export function StarRating({ traderId, avgStars, totalCount, size = "md", showRateButton = false }: StarRatingProps) {
-  const { getUserRating, rateTrader, isLoggedIn } = useUser()
+export function StarRating({ traderId, username, avgStars, totalCount, size = "md", showRateButton = false }: StarRatingProps) {
+  const { getUserRating, rateTrader, ratingLoading, isLoggedIn } = useUser()
   const [hoverRating, setHoverRating] = useState(0)
   const [isRating, setIsRating] = useState(false)
   const userRating = getUserRating(traderId)
+  const isLoading = ratingLoading === traderId
 
   const sizeClasses = {
     sm: "h-3 w-3",
@@ -25,12 +27,12 @@ export function StarRating({ traderId, avgStars, totalCount, size = "md", showRa
     lg: "h-5 w-5",
   }
 
-  const handleRate = (stars: number) => {
+  const handleRate = async (stars: number) => {
     if (!isLoggedIn) {
       // Would redirect to login in real app
       return
     }
-    rateTrader(traderId, stars)
+    await rateTrader(traderId, username, stars)
     setIsRating(false)
   }
 

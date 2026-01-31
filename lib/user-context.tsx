@@ -10,6 +10,7 @@ import {
   getMySubscriptions,
 } from "./services/subscriptions-service"
 import { addFavorite, removeFavorite, getMyFavorites } from "./services/favorites-service"
+import { rateTrader as rateTraderAPI } from "./services/ratings-service"
 
 const TOKEN_STORAGE_KEY = "scorex_token"
 
@@ -88,7 +89,8 @@ interface UserContextType extends UserState {
   getBellSetting: (traderId: string) => "all" | "personalized" | "none"
   subscriptionLoading: string | null
   // Ratings
-  rateTrader: (traderId: string, stars: number) => void
+  rateTrader: (traderId: string, username: string, stars: number) => Promise<void>
+  ratingLoading: string | null
   getUserRating: (traderId: string) => number | null
   // Votes
   voteSignal: (signalId: string, vote: "like" | "dislike") => void
@@ -139,6 +141,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UserState>(initialState)
   const [subscriptionLoading, setSubscriptionLoading] = useState<string | null>(null)
   const [favoriteLoading, setFavoriteLoading] = useState<string | null>(null)
+  const [ratingLoading, setRatingLoading] = useState<string | null>(null)
   const router = useRouter()
 
   const setToken = useCallback((token: string | null) => {
@@ -185,7 +188,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           traderId: sub.traderId,
           bellSetting: (sub.bellSetting || "all") as "all" | "personalized" | "none",
         }))
-        favorites = (favsResponse?.signalIds || [])
+        favorites = (favsResponse?.signals || []).map((signal) => signal.id)
       } catch {
         // Silently fail - subscriptions/favorites will be empty
       }
@@ -373,21 +376,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
     [state.subscriptions],
   )
 
-  const rateTrader = useCallback((traderId: string, stars: number) => {
-    setState((prev) => {
-      const existing = prev.ratings.find((r) => r.traderId === traderId)
-      if (existing) {
+  const rateTrader = useCallback(async (traderId: string, username: string, stars: number) => {
+    if (!state.token) return
+
+    setRatingLoading(traderId)
+    try {
+      await rateTraderAPI(username, stars, state.token)
+      
+      // Update local state after successful API call
+      setState((prev) => {
+        const existing = prev.ratings.find((r) => r.traderId === traderId)
+        if (existing) {
+          return {
+            ...prev,
+            ratings: prev.ratings.map((r) => (r.traderId === traderId ? { ...r, stars } : r)),
+          }
+        }
         return {
           ...prev,
-          ratings: prev.ratings.map((r) => (r.traderId === traderId ? { ...r, stars } : r)),
+          ratings: [...prev.ratings, { traderId, stars }],
         }
-      }
-      return {
-        ...prev,
-        ratings: [...prev.ratings, { traderId, stars }],
-      }
-    })
-  }, [])
+      })
+    } catch (err) {
+      console.error("Failed to rate trader:", err)
+    } finally {
+      setRatingLoading(null)
+    }
+  }, [state.token])
 
   const getUserRating = useCallback(
     (traderId: string): number | null => {
@@ -458,6 +473,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         getBellSetting,
         subscriptionLoading,
         rateTrader,
+        ratingLoading,
         getUserRating,
         voteSignal,
         getVote,
