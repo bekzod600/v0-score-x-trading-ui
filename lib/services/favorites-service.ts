@@ -1,8 +1,10 @@
 import { apiRequest } from "@/lib/api-client"
 import { type ApiSignal } from "./signals-service"
 
+// Backend returns { signals: [...], total: number }
 export interface FavoritesResponse {
-  favorites: ApiSignal[]
+  signals: ApiSignal[]
+  total?: number
 }
 
 /**

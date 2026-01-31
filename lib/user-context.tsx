@@ -185,7 +185,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           traderId: sub.traderId,
           bellSetting: (sub.bellSetting || "all") as "all" | "personalized" | "none",
         }))
-        favorites = (favsResponse?.signalIds || [])
+        favorites = (favsResponse?.signals || []).map((signal) => signal.id)
       } catch {
         // Silently fail - subscriptions/favorites will be empty
       }
