@@ -3,6 +3,12 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { apiRequest, type ApiError } from "./api-client"
+import {
+  subscribeToTrader,
+  unsubscribeFromTrader,
+  updateBellSetting as updateBellSettingAPI,
+  getMySubscriptions,
+} from "./services/subscriptions-service"
 
 const TOKEN_STORAGE_KEY = "scorex_token"
 
@@ -73,11 +79,12 @@ interface UserContextType extends UserState {
   toggleFavorite: (signalId: string) => void
   isFavorite: (signalId: string) => boolean
   // Subscriptions
-  subscribe: (traderId: string) => void
-  unsubscribe: (traderId: string) => void
+  subscribe: (traderId: string, username: string) => Promise<void>
+  unsubscribe: (traderId: string, username: string) => Promise<void>
   isSubscribed: (traderId: string) => boolean
-  setBellSetting: (traderId: string, setting: "all" | "personalized" | "none") => void
+  setBellSetting: (traderId: string, username: string, setting: "all" | "personalized" | "none") => Promise<void>
   getBellSetting: (traderId: string) => "all" | "personalized" | "none"
+  subscriptionLoading: string | null
   // Ratings
   rateTrader: (traderId: string, stars: number) => void
   getUserRating: (traderId: string) => number | null
@@ -128,6 +135,7 @@ interface AuthMeResponse {
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UserState>(initialState)
+  const [subscriptionLoading, setSubscriptionLoading] = useState<string | null>(null)
   const router = useRouter()
 
   const setToken = useCallback((token: string | null) => {
@@ -162,11 +170,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
         timeoutMs: 5000, // Shorter timeout for auth check
       })
 
+      // Fetch subscriptions after successful auth
+      let subscriptions: Subscription[] = []
+      try {
+        const subsResponse = await getMySubscriptions(storedToken)
+        subscriptions = (subsResponse?.subscriptions || []).map((sub) => ({
+          traderId: sub.traderId,
+          bellSetting: (sub.bellSetting || "all") as "all" | "personalized" | "none",
+        }))
+      } catch {
+        // Silently fail - subscriptions will be empty
+      }
+
       setState((prev) => ({
         ...prev,
         isLoggedIn: true,
         token: storedToken,
         isHydrating: false,
+        subscriptions,
         profile: {
           ...prev.profile,
           ...(userData.id && { id: userData.id }),
@@ -256,22 +277,42 @@ export function UserProvider({ children }: { children: ReactNode }) {
     [state.favorites],
   )
 
-  const subscribe = useCallback((traderId: string) => {
-    setState((prev) => {
-      if (prev.subscriptions.some((s) => s.traderId === traderId)) return prev
-      return {
-        ...prev,
-        subscriptions: [...prev.subscriptions, { traderId, bellSetting: "all" }],
-      }
-    })
-  }, [])
+  const subscribe = useCallback(async (traderId: string, username: string) => {
+    if (!state.token) return
 
-  const unsubscribe = useCallback((traderId: string) => {
-    setState((prev) => ({
-      ...prev,
-      subscriptions: prev.subscriptions.filter((s) => s.traderId !== traderId),
-    }))
-  }, [])
+    setSubscriptionLoading(traderId)
+    try {
+      await subscribeToTrader(username, state.token)
+      setState((prev) => {
+        if (prev.subscriptions.some((s) => s.traderId === traderId)) return prev
+        return {
+          ...prev,
+          subscriptions: [...prev.subscriptions, { traderId, bellSetting: "all" }],
+        }
+      })
+    } catch (err) {
+      console.error("Failed to subscribe:", err)
+    } finally {
+      setSubscriptionLoading(null)
+    }
+  }, [state.token])
+
+  const unsubscribe = useCallback(async (traderId: string, username: string) => {
+    if (!state.token) return
+
+    setSubscriptionLoading(traderId)
+    try {
+      await unsubscribeFromTrader(username, state.token)
+      setState((prev) => ({
+        ...prev,
+        subscriptions: prev.subscriptions.filter((s) => s.traderId !== traderId),
+      }))
+    } catch (err) {
+      console.error("Failed to unsubscribe:", err)
+    } finally {
+      setSubscriptionLoading(null)
+    }
+  }, [state.token])
 
   const isSubscribed = useCallback(
     (traderId: string) => {
@@ -280,12 +321,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
     [state.subscriptions],
   )
 
-  const setBellSetting = useCallback((traderId: string, setting: "all" | "personalized" | "none") => {
-    setState((prev) => ({
-      ...prev,
-      subscriptions: prev.subscriptions.map((s) => (s.traderId === traderId ? { ...s, bellSetting: setting } : s)),
-    }))
-  }, [])
+  const setBellSetting = useCallback(async (traderId: string, username: string, setting: "all" | "personalized" | "none") => {
+    if (!state.token) return
+
+    setSubscriptionLoading(traderId)
+    try {
+      await updateBellSettingAPI(username, setting, state.token)
+      setState((prev) => ({
+        ...prev,
+        subscriptions: prev.subscriptions.map((s) => (s.traderId === traderId ? { ...s, bellSetting: setting } : s)),
+      }))
+    } catch (err) {
+      console.error("Failed to update bell setting:", err)
+    } finally {
+      setSubscriptionLoading(null)
+    }
+  }, [state.token])
 
   const getBellSetting = useCallback(
     (traderId: string): "all" | "personalized" | "none" => {
@@ -377,6 +428,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isSubscribed,
         setBellSetting,
         getBellSetting,
+        subscriptionLoading,
         rateTrader,
         getUserRating,
         voteSignal,

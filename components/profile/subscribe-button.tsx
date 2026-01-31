@@ -16,7 +16,7 @@ interface SubscribeButtonProps {
 }
 
 export function SubscribeButton({ traderId, traderUsername }: SubscribeButtonProps) {
-  const { isSubscribed, subscribe, unsubscribe, getBellSetting, setBellSetting, isLoggedIn } = useUser()
+  const { isSubscribed, subscribe, unsubscribe, getBellSetting, setBellSetting, isLoggedIn, subscriptionLoading } = useUser()
   const { addNotification } = useWallet()
   const { t } = useI18n()
   const [showBellMenu, setShowBellMenu] = useState(false)
@@ -24,13 +24,14 @@ export function SubscribeButton({ traderId, traderUsername }: SubscribeButtonPro
 
   const subscribed = isSubscribed(traderId)
   const bellSetting = getBellSetting(traderId)
+  const isLoading = subscriptionLoading === traderId
 
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     if (!isLoggedIn) {
       setShowLoginModal(true)
       return
     }
-    subscribe(traderId)
+    await subscribe(traderId, traderUsername)
     addNotification({
       title: "Subscribed!",
       message: `You are now following @${traderUsername}. You'll receive notifications for new signals.`,
@@ -39,8 +40,8 @@ export function SubscribeButton({ traderId, traderUsername }: SubscribeButtonPro
     })
   }
 
-  const handleUnsubscribe = () => {
-    unsubscribe(traderId)
+  const handleUnsubscribe = async () => {
+    await unsubscribe(traderId, traderUsername)
     addNotification({
       title: "Unsubscribed",
       message: `You unfollowed @${traderUsername}.`,
@@ -48,8 +49,8 @@ export function SubscribeButton({ traderId, traderUsername }: SubscribeButtonPro
     })
   }
 
-  const handleBellChange = (setting: "all" | "personalized" | "none") => {
-    setBellSetting(traderId, setting)
+  const handleBellChange = async (setting: "all" | "personalized" | "none") => {
+    await setBellSetting(traderId, traderUsername, setting)
     setShowBellMenu(false)
   }
 
@@ -58,8 +59,8 @@ export function SubscribeButton({ traderId, traderUsername }: SubscribeButtonPro
   if (!subscribed) {
     return (
       <>
-        <Button onClick={handleSubscribe} className="gap-2">
-          {t("action.subscribe")}
+        <Button onClick={handleSubscribe} className="gap-2" disabled={isLoading}>
+          {isLoading ? "..." : t("action.subscribe")}
         </Button>
         <LoginRequiredModal open={showLoginModal} onOpenChange={setShowLoginModal} />
       </>
@@ -68,9 +69,9 @@ export function SubscribeButton({ traderId, traderUsername }: SubscribeButtonPro
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="secondary" onClick={handleUnsubscribe} className="gap-2">
+      <Button variant="secondary" onClick={handleUnsubscribe} className="gap-2" disabled={isLoading}>
         <Check className="h-4 w-4" />
-        {t("action.subscribed")}
+        {isLoading ? "..." : t("action.subscribed")}
       </Button>
       <DropdownMenu open={showBellMenu} onOpenChange={setShowBellMenu}>
         <DropdownMenuTrigger asChild>
