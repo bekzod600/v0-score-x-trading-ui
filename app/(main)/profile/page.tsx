@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SignalCard } from "@/components/signals/signal-card"
 import { MySignalCard } from "@/components/profile/my-signal-card"
 import { SubscriptionCard } from "@/components/wallet/subscription-card"
@@ -233,24 +234,40 @@ function ProfileContent() {
 
       {/* Tabs */}
       <Tabs defaultValue={tab}>
-        <TabsList className="mb-6 grid w-full grid-cols-4">
+        {/* Mobile: Select dropdown */}
+        <div className="mb-6 sm:hidden">
+          <Select value={tab} onValueChange={(value) => router.push(`/profile?tab=${value}`)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select tab" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="signals">{t("profile.mySignals")}</SelectItem>
+              <SelectItem value="favorites">{t("profile.favorites")}</SelectItem>
+              <SelectItem value="certificates">{t("profile.certificates")}</SelectItem>
+              <SelectItem value="subscription">{t("profile.subscription")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Desktop: TabsList */}
+        <TabsList className="mb-6 hidden w-full grid-cols-4 sm:grid">
           <TabsTrigger value="signals" asChild>
-            <Link href="/profile?tab=signals" className="text-xs sm:text-sm">
+            <Link href="/profile?tab=signals">
               {t("profile.mySignals")}
             </Link>
           </TabsTrigger>
           <TabsTrigger value="favorites" asChild>
-            <Link href="/profile?tab=favorites" className="text-xs sm:text-sm">
+            <Link href="/profile?tab=favorites">
               {t("profile.favorites")}
             </Link>
           </TabsTrigger>
           <TabsTrigger value="certificates" asChild>
-            <Link href="/profile?tab=certificates" className="text-xs sm:text-sm">
+            <Link href="/profile?tab=certificates">
               {t("profile.certificates")}
             </Link>
           </TabsTrigger>
           <TabsTrigger value="subscription" asChild>
-            <Link href="/profile?tab=subscription" className="text-xs sm:text-sm">
+            <Link href="/profile?tab=subscription">
               {t("profile.subscription")}
             </Link>
           </TabsTrigger>

@@ -24,7 +24,7 @@ export function SubscriptionCard() {
   const { balance, subscription, purchaseSubscription, setAutoRenew } = useWallet()
   const [isLoading, setIsLoading] = useState(false)
 
-  const premiumPrice = 29.99
+  const premiumPrice = 2
   const isPremium = subscription.plan === "premium"
   const hasInsufficientBalance = balance < premiumPrice
 
