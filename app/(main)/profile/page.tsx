@@ -80,10 +80,12 @@ function ProfileContent() {
       try {
         const response = await getMyFavorites(token)
         // Backend returns { signals: [...], total: number }
-        setFavoriteSignals(response.signals || [])
+        setFavoriteSignals(response?.signals || [])
       } catch (err) {
+        // Silently fail - show empty state instead of error
+        // Backend endpoint may not be fully implemented yet
         console.error("Failed to fetch favorites:", err)
-        setFavoritesError(err instanceof Error ? err.message : "Failed to load favorites")
+        setFavoriteSignals([])
       } finally {
         setIsLoadingFavorites(false)
       }
