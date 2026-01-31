@@ -19,6 +19,7 @@ import { useWallet } from "@/lib/wallet-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useSearchParams } from "next/navigation"
 import { getMySignals, type ApiSignal } from "@/lib/services/signals-service"
+import { getMyFavorites } from "@/lib/services/favorites-service"
 
 function ProfileContent() {
   const router = useRouter()
@@ -33,6 +34,11 @@ function ProfileContent() {
   const [userSignals, setUserSignals] = useState<ApiSignal[]>([])
   const [isLoadingSignals, setIsLoadingSignals] = useState(true)
   const [signalsError, setSignalsError] = useState<string | null>(null)
+
+  // State for favorite signals from API
+  const [favoriteSignals, setFavoriteSignals] = useState<ApiSignal[]>([])
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
+  const [favoritesError, setFavoritesError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -64,12 +70,34 @@ function ProfileContent() {
     fetchUserSignals()
   }, [token])
 
+  // Fetch favorites when tab is "favorites"
+  useEffect(() => {
+    async function fetchFavorites() {
+      if (tab !== "favorites" || !token) return
+      
+      setIsLoadingFavorites(true)
+      setFavoritesError(null)
+      try {
+        const response = await getMyFavorites(token)
+        // Backend returns { signals: [...], total: number }
+        setFavoriteSignals(response.signals || [])
+      } catch (err) {
+        console.error("Failed to fetch favorites:", err)
+        setFavoritesError(err instanceof Error ? err.message : "Failed to load favorites")
+      } finally {
+        setIsLoadingFavorites(false)
+      }
+    }
+    
+    fetchFavorites()
+  }, [tab, token])
+
   if (!isLoggedIn) {
     return null
   }
 
-  // Favorites count (will be updated when backend endpoint is available)
-  const favoritesCount = favorites?.length || 0
+  // Favorites count - use loaded data if available, otherwise context
+  const favoritesCount = favoriteSignals.length || favorites?.length || 0
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-6">
@@ -253,13 +281,31 @@ function ProfileContent() {
         </TabsContent>
 
         <TabsContent value="favorites" className="space-y-4">
-          {/* Favorites will be fetched from backend when endpoint is available */}
-          <EmptyState
-            icon={Heart}
-            title={t("profile.noFavorites")}
-            description={t("profile.noFavoritesDesc")}
-            action={{ label: t("nav.signals"), href: "/signals" }}
-          />
+          {isLoadingFavorites ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <SkeletonCard key={i} variant="signal" />
+              ))}
+            </div>
+          ) : favoritesError ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <p className="text-sm text-destructive">{favoritesError}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          ) : favoriteSignals.length > 0 ? (
+            favoriteSignals.map((signal) => (
+              <SignalCard key={signal.id} signal={signal} />
+            ))
+          ) : (
+            <EmptyState
+              icon={Heart}
+              title={t("profile.noFavorites")}
+              description={t("profile.noFavoritesDesc")}
+              action={{ label: t("nav.signals"), href: "/signals" }}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="certificates">
