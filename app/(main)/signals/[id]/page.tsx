@@ -81,7 +81,16 @@ export default function SignalDetailPage() {
   const [likes, setLikes] = useState(0)
   const [dislikes, setDislikes] = useState(0)
 
+  // Check if id is a valid UUID format (skip fetch for routes like "add")
+  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
   const fetchSignal = useCallback(async () => {
+    if (!isValidUuid) {
+      setIsLoading(false)
+      setError("Invalid signal ID")
+      return
+    }
+    
     setIsLoading(true)
     setError(null)
     try {
@@ -90,12 +99,11 @@ export default function SignalDetailPage() {
       setLikes(data.likes)
       setDislikes(data.dislikes)
     } catch (err: any) {
-      console.error("[v0] Failed to fetch signal:", err)
       setError(err?.message || "Failed to load signal. Please try again.")
     } finally {
       setIsLoading(false)
     }
-  }, [id, token])
+  }, [id, token, isValidUuid])
 
   useEffect(() => {
     fetchSignal()
