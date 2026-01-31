@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Suspense } from "react"
-import { Settings, Edit, Trophy, Star, TrendingUp, Wallet, Award, Heart, Plus, FileText } from "lucide-react"
+import { Settings, Edit, Trophy, Star, TrendingUp, Wallet, Award, Heart, Plus, FileText, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -18,6 +18,7 @@ import { useUser } from "@/lib/user-context"
 import { useWallet } from "@/lib/wallet-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useSearchParams } from "next/navigation"
+import { getMySignals, type ApiSignal } from "@/lib/services/signals-service"
 
 function ProfileContent() {
   const router = useRouter()
@@ -25,8 +26,13 @@ function ProfileContent() {
   const tab = searchParams.get("tab") || "signals"
   const { t } = useI18n()
 
-  const { profile, getFavoriteSignals, getUserSignals, isLoggedIn } = useUser()
+  const { profile, favorites, isLoggedIn, token } = useUser()
   const { balance } = useWallet()
+
+  // State for user signals from API
+  const [userSignals, setUserSignals] = useState<ApiSignal[]>([])
+  const [isLoadingSignals, setIsLoadingSignals] = useState(true)
+  const [signalsError, setSignalsError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -34,12 +40,36 @@ function ProfileContent() {
     }
   }, [isLoggedIn, router])
 
+  // Fetch user's signals from API
+  useEffect(() => {
+    async function fetchUserSignals() {
+      if (!token) {
+        setIsLoadingSignals(false)
+        return
+      }
+
+      try {
+        setIsLoadingSignals(true)
+        setSignalsError(null)
+        const response = await getMySignals(token)
+        setUserSignals(response.signals || [])
+      } catch (err) {
+        setSignalsError(err instanceof Error ? err.message : "Failed to load signals")
+        setUserSignals([])
+      } finally {
+        setIsLoadingSignals(false)
+      }
+    }
+
+    fetchUserSignals()
+  }, [token])
+
   if (!isLoggedIn) {
     return null
   }
 
-  const userSignals = getUserSignals()
-  const favoriteSignals = getFavoriteSignals()
+  // Favorites count (will be updated when backend endpoint is available)
+  const favoritesCount = favorites?.length || 0
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-6">
@@ -137,7 +167,7 @@ function ProfileContent() {
                 <Heart className="h-5 w-5 text-destructive" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold">{favoriteSignals.length}</div>
+                <div className="text-sm font-semibold">{favoritesCount}</div>
                 <div className="text-xs text-muted-foreground">{t("profile.favorites")}</div>
               </div>
             </CardContent>
@@ -197,8 +227,21 @@ function ProfileContent() {
         </TabsList>
 
         <TabsContent value="signals" className="space-y-4">
-          {userSignals.length > 0 ? (
-            userSignals.map((signal) => <MySignalCard key={signal.id} signal={signal} />)
+          {isLoadingSignals ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <SkeletonCard key={i} variant="signal" />
+              ))}
+            </div>
+          ) : signalsError ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <p className="text-sm text-destructive">{signalsError}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          ) : userSignals.length > 0 ? (
+            userSignals.map((signal) => <MySignalCard key={signal.id} signal={signal as any} />)
           ) : (
             <EmptyState
               icon={FileText}
@@ -210,16 +253,13 @@ function ProfileContent() {
         </TabsContent>
 
         <TabsContent value="favorites" className="space-y-4">
-          {favoriteSignals.length > 0 ? (
-            favoriteSignals.map((signal) => <SignalCard key={signal.id} signal={signal} />)
-          ) : (
-            <EmptyState
-              icon={Heart}
-              title={t("profile.noFavorites")}
-              description={t("profile.noFavoritesDesc")}
-              action={{ label: t("nav.signals"), href: "/signals" }}
-            />
-          )}
+          {/* Favorites will be fetched from backend when endpoint is available */}
+          <EmptyState
+            icon={Heart}
+            title={t("profile.noFavorites")}
+            description={t("profile.noFavoritesDesc")}
+            action={{ label: t("nav.signals"), href: "/signals" }}
+          />
         </TabsContent>
 
         <TabsContent value="certificates">
