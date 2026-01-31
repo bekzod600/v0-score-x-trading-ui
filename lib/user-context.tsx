@@ -9,6 +9,7 @@ import {
   updateBellSetting as updateBellSettingAPI,
   getMySubscriptions,
 } from "./services/subscriptions-service"
+import { addFavorite, removeFavorite, getMyFavorites } from "./services/favorites-service"
 
 const TOKEN_STORAGE_KEY = "scorex_token"
 
@@ -76,8 +77,9 @@ interface UserContextType extends UserState {
   // Profile
   updateProfile: (updates: Partial<UserProfile>) => void
   // Favorites
-  toggleFavorite: (signalId: string) => void
+  toggleFavorite: (signalId: string) => Promise<void>
   isFavorite: (signalId: string) => boolean
+  favoriteLoading: string | null
   // Subscriptions
   subscribe: (traderId: string, username: string) => Promise<void>
   unsubscribe: (traderId: string, username: string) => Promise<void>
@@ -136,6 +138,7 @@ interface AuthMeResponse {
 export function UserProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UserState>(initialState)
   const [subscriptionLoading, setSubscriptionLoading] = useState<string | null>(null)
+  const [favoriteLoading, setFavoriteLoading] = useState<string | null>(null)
   const router = useRouter()
 
   const setToken = useCallback((token: string | null) => {
@@ -170,16 +173,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
         timeoutMs: 5000, // Shorter timeout for auth check
       })
 
-      // Fetch subscriptions after successful auth
+      // Fetch subscriptions and favorites after successful auth
       let subscriptions: Subscription[] = []
+      let favorites: string[] = []
       try {
-        const subsResponse = await getMySubscriptions(storedToken)
+        const [subsResponse, favsResponse] = await Promise.all([
+          getMySubscriptions(storedToken),
+          getMyFavorites(storedToken),
+        ])
         subscriptions = (subsResponse?.subscriptions || []).map((sub) => ({
           traderId: sub.traderId,
           bellSetting: (sub.bellSetting || "all") as "all" | "personalized" | "none",
         }))
+        favorites = (favsResponse?.signalIds || [])
       } catch {
-        // Silently fail - subscriptions will be empty
+        // Silently fail - subscriptions/favorites will be empty
       }
 
       setState((prev) => ({
@@ -188,6 +196,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         token: storedToken,
         isHydrating: false,
         subscriptions,
+        favorites,
         profile: {
           ...prev.profile,
           ...(userData.id && { id: userData.id }),
@@ -261,14 +270,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const toggleFavorite = useCallback((signalId: string) => {
-    setState((prev) => ({
-      ...prev,
-      favorites: prev.favorites.includes(signalId)
-        ? prev.favorites.filter((id) => id !== signalId)
-        : [...prev.favorites, signalId],
-    }))
-  }, [])
+  const toggleFavorite = useCallback(async (signalId: string) => {
+    if (!state.token) return
+
+    setFavoriteLoading(signalId)
+    const isFav = state.favorites.includes(signalId)
+
+    try {
+      if (isFav) {
+        await removeFavorite(signalId, state.token)
+        setState((prev) => ({
+          ...prev,
+          favorites: prev.favorites.filter((id) => id !== signalId),
+        }))
+      } else {
+        await addFavorite(signalId, state.token)
+        setState((prev) => ({
+          ...prev,
+          favorites: [...prev.favorites, signalId],
+        }))
+      }
+    } catch (err) {
+      console.error("Failed to toggle favorite:", err)
+    } finally {
+      setFavoriteLoading(null)
+    }
+  }, [state.token, state.favorites])
 
   const isFavorite = useCallback(
     (signalId: string) => {
@@ -423,6 +450,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         updateProfile,
         toggleFavorite,
         isFavorite,
+        favoriteLoading,
         subscribe,
         unsubscribe,
         isSubscribed,
