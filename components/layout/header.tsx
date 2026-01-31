@@ -28,7 +28,6 @@ function HeaderContent() {
   const navItems = [
     { href: "/", label: t("nav.home") },
     { href: "/signals", label: t("nav.signals") },
-    { href: "/signals?tab=results", label: t("nav.results") },
     { href: "/rating", label: t("nav.rating") },
     { href: "/training-centers", label: t("nav.training") },
     { href: "/news", label: t("nav.news") },
