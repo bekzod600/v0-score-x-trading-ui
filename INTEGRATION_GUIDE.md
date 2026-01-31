@@ -8,10 +8,10 @@ This document covers the complete integration of the ScoreX frontend with the Ne
 ### Required Environment Variables
 Add these to your `.env.local` file:
 
-```
+\`\`\`
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_WS_URL=ws://localhost:3000
-```
+\`\`\`
 
 The backend server should be running on `http://localhost:3000` for development.
 

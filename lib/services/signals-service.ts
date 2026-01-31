@@ -50,6 +50,23 @@ export interface BuySignalResponse {
   newBalance?: number
 }
 
+export interface CreateSignalPayload {
+  ticker: string
+  ep: number        // entry price
+  sl: number        // stop loss
+  tp1: number       // take profit 1
+  tp2?: number      // take profit 2 (optional)
+  accessType: "FREE" | "PAID"
+  price?: number    // required if PAID
+}
+
+export interface CreateSignalResponse {
+  id: string
+  ticker: string
+  status: string
+  createdAt: string
+}
+
 // Raw API response format (snake_case from backend)
 interface RawApiSignal {
   id: string
@@ -413,4 +430,23 @@ export async function getMySignals(token: string, params?: {
     .map(normalizeSignal)
 
   return { signals, total, page: 1, limit: 50 }
+}
+
+/**
+ * Create a new signal
+ * POST /signals
+ * No mock data fallback - throws on API error
+ * Requires authentication
+ */
+export async function createSignal(
+  payload: CreateSignalPayload,
+  token: string
+): Promise<CreateSignalResponse> {
+  return await apiRequest<CreateSignalResponse>({
+    method: "POST",
+    path: "/signals",
+    token,
+    body: payload,
+    timeoutMs: 10000,
+  })
 }

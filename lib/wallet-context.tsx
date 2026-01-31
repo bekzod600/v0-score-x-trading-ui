@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import {
   initialWalletState,
   generateId,
@@ -11,8 +11,11 @@ import {
   type TransactionMethod,
   type TransactionStatus,
 } from "./wallet-store"
+import { getWallet, getWalletTransactions } from "@/lib/services/wallet-service"
 
 interface WalletContextType extends WalletState {
+  // Loading state
+  isLoading: boolean
   // Top-up actions
   topUpClick: (amount: number) => void
   topUpP2P: (amount: number, cardType: string) => void
@@ -37,6 +40,7 @@ const WalletContext = createContext<WalletContextType | null>(null)
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WalletState>(initialWalletState)
+  const [isLoading, setIsLoading] = useState(false)
 
   // Added setBalance for direct balance updates from API
   const setBalance = useCallback((newBalance: number) => {
@@ -46,13 +50,49 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  // Added refreshBalance to fetch balance from API (placeholder for future backend integration)
-  const refreshBalance = useCallback(async () => {
-    // TODO: In future, fetch balance from backend API
-    // For now, this is a no-op that can be called after purchases
-    // const response = await apiRequest({ method: "GET", path: "/wallet/balance", token })
-    // setBalance(response.balance)
+  // Fetch wallet data from API
+  const fetchWalletData = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("scorex_token") : null
+    if (!token) return
+
+    setIsLoading(true)
+    try {
+      const [walletData, txData] = await Promise.all([
+        getWallet(token),
+        getWalletTransactions(token),
+      ])
+
+      setState((prev) => ({
+        ...prev,
+        balance: walletData?.balance ?? prev.balance,
+        transactions: (txData?.transactions || []).map((tx) => ({
+          id: tx.id,
+          type: tx.type as TransactionType,
+          method: "wallet" as TransactionMethod,
+          amount: tx.amount,
+          fee: tx.fee,
+          creditedAmount: tx.creditedAmount,
+          status: tx.status as TransactionStatus,
+          description: tx.description,
+          createdAt: tx.createdAt,
+        })),
+      }))
+    } catch (err) {
+      // Silently fail - wallet will use initial state
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
+
+  // Fetch wallet data on mount
+  useEffect(() => {
+    fetchWalletData()
+  }, [fetchWalletData])
+
+  // Refresh balance from API
+  const refreshBalance = useCallback(async () => {
+    await fetchWalletData()
+  }, [fetchWalletData])
 
   const addTransaction = useCallback(
     (
@@ -229,6 +269,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     <WalletContext.Provider
       value={{
         ...state,
+        isLoading,
         topUpClick,
         topUpP2P,
         purchaseSignal,
