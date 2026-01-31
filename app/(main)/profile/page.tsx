@@ -233,7 +233,7 @@ function ProfileContent() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue={tab}>
+      <Tabs value={tab}>
         {/* Mobile: Select dropdown */}
         <div className="mb-6 sm:hidden">
           <Select value={tab} onValueChange={(value) => router.push(`/profile?tab=${value}`)}>
