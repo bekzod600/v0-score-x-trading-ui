@@ -1,8 +1,8 @@
 "use client"
 
-import { use, useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft,
   Lock,
@@ -63,8 +63,9 @@ function getFinalPrice(signal: ApiSignal): number {
   return signal.price
 }
 
-export default function SignalDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function SignalDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const { t } = useI18n()
   const { showToast } = useToast()
