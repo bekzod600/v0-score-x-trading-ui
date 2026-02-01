@@ -96,6 +96,9 @@ function ProfileContent() {
 
     if (profile.username) {
       fetchProfileStats()
+    } else {
+      // No username yet, stop loading
+      setIsLoadingProfile(false)
     }
   }, [token, profile.username])
 
