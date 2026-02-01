@@ -264,7 +264,7 @@ function SignalsContent() {
 
       <ActiveFilterChips filters={filters} onRemoveFilter={handleRemoveFilter} className="mt-4" />
 
-      <div className="mt-6 flex gap-6">
+      <div className="mt-6 flex gap-6 items-start">
         <aside className="hidden w-72 shrink-0 md:block">
           <div className="sticky top-20 rounded-lg border border-border bg-card p-4">
             <div className="mb-4 flex items-center justify-between">
