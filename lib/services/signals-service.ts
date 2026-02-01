@@ -35,10 +35,10 @@ export interface ApiSignal {
   closedAt: string | null
   isLocked: boolean
   isPurchased: boolean
-  // Backend calculated fields (null for locked signals)
-  potentialProfit: number | null
-  potentialLoss: number | null
-  riskRatio: number | null
+  // Backend calculated fields (ALWAYS present, even for locked signals)
+  potentialProfit: number  // e.g. 15.5 means +15.5%
+  potentialLoss: number    // e.g. 5.2 means -5.2%
+  riskRatio: number        // e.g. 2.98 means 2.98:1
 }
 
 export interface SignalsListResponse {
@@ -104,13 +104,13 @@ interface RawApiSignal {
   is_locked?: boolean
   is_purchased?: boolean
   isPurchased?: boolean
-  // Backend calculated fields
-  potential_profit?: number | null
-  potentialProfit?: number | null
-  potential_loss?: number | null
-  potentialLoss?: number | null
-  risk_ratio?: number | null
-  riskRatio?: number | null
+  // Backend calculated fields (always present)
+  potential_profit?: number
+  potentialProfit?: number
+  potential_loss?: number
+  potentialLoss?: number
+  risk_ratio?: number
+  riskRatio?: number
 }
 
 interface RawApiTrader {
@@ -236,10 +236,10 @@ function normalizeSignal(raw: RawApiSignal): ApiSignal {
     closedAt: raw.closedAt ?? raw.closed_at ?? null,
     isLocked,
     isPurchased,
-    // Backend calculated fields
-    potentialProfit: toNumberOrNull(raw.potentialProfit ?? raw.potential_profit),
-    potentialLoss: toNumberOrNull(raw.potentialLoss ?? raw.potential_loss),
-    riskRatio: toNumberOrNull(raw.riskRatio ?? raw.risk_ratio),
+    // Backend calculated fields (always present)
+    potentialProfit: toNumber(raw.potentialProfit ?? raw.potential_profit),
+    potentialLoss: toNumber(raw.potentialLoss ?? raw.potential_loss),
+    riskRatio: toNumber(raw.riskRatio ?? raw.risk_ratio),
   }
 }
 

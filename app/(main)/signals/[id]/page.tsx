@@ -424,22 +424,18 @@ export default function SignalDetailPage() {
               <div className="flex items-center justify-between rounded-lg bg-success/10 p-3">
                 <span className="text-sm text-muted-foreground">Potential Profit</span>
                 <span className="font-semibold text-success flex items-center gap-1">
-                  <TrendingUp className="h-4 w-4" />
-                  {potentialProfit !== null ? `+${potentialProfit}%` : "***"}
+                  <TrendingUp className="h-4 w-4" />+{potentialProfit}%
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-destructive/10 p-3">
                 <span className="text-sm text-muted-foreground">Potential Loss</span>
                 <span className="font-semibold text-destructive flex items-center gap-1">
-                  <TrendingDown className="h-4 w-4" />
-                  {potentialLoss !== null ? `-${potentialLoss}%` : "***"}
+                  <TrendingDown className="h-4 w-4" />-{potentialLoss}%
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="text-sm text-muted-foreground">Risk Ratio</span>
-                <span className="font-semibold">
-                  {riskRatio !== null ? `${riskRatio}:1` : "***"}
-                </span>
+                <span className="font-semibold">{riskRatio}:1</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="text-sm text-muted-foreground flex items-center gap-1">

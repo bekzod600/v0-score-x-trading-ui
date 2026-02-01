@@ -47,10 +47,10 @@ interface SignalCardSignal {
   closedAt: string | null
   isLocked: boolean
   isPurchased: boolean
-  // Backend calculated fields
-  potentialProfit: number | null
-  potentialLoss: number | null
-  riskRatio: number | null
+  // Backend calculated fields (always present)
+  potentialProfit: number
+  potentialLoss: number
+  riskRatio: number
 }
 
 interface SignalCardProps {
@@ -170,27 +170,23 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                 <StatusBadge status={signal.status as any} />
               </div>
 
-              {/* Summary Stats */}
+              {/* Summary Stats - Always shown, even for locked signals */}
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div className="rounded-md bg-success/10 px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.profit")}</div>
                   <div className="font-semibold text-success flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    {potentialProfit !== null ? `+${potentialProfit}%` : "***"}
+                    <TrendingUp className="h-3 w-3" />+{potentialProfit}%
                   </div>
                 </div>
                 <div className="rounded-md bg-destructive/10 px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.loss")}</div>
                   <div className="font-semibold text-destructive flex items-center gap-1">
-                    <TrendingDown className="h-3 w-3" />
-                    {potentialLoss !== null ? `-${potentialLoss}%` : "***"}
+                    <TrendingDown className="h-3 w-3" />-{potentialLoss}%
                   </div>
                 </div>
                 <div className="rounded-md bg-muted px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.risk")}</div>
-                  <div className="font-semibold">
-                    {riskRatio !== null ? `${riskRatio}:1` : "***"}
-                  </div>
+                  <div className="font-semibold">{riskRatio}:1</div>
                 </div>
               </div>
 
