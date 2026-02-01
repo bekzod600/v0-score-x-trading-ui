@@ -38,23 +38,6 @@ const timelineSteps = [
   { key: "result", label: "Result" },
 ]
 
-function calculatePotentialProfit(signal: ApiSignal): number {
-  if (!signal.entry || !signal.tp2) return 0
-  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
-}
-
-function calculatePotentialLoss(signal: ApiSignal): number {
-  if (!signal.entry || !signal.sl) return 0
-  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
-}
-
-function calculateRiskRatio(signal: ApiSignal): number {
-  const profit = calculatePotentialProfit(signal)
-  const loss = calculatePotentialLoss(signal)
-  if (loss === 0) return 0
-  return Number((profit / loss).toFixed(1))
-}
-
 function getFinalPrice(signal: ApiSignal): number {
   if (signal.isFree) return 0
   if (signal.discountPercent > 0) {
@@ -144,9 +127,10 @@ export default function SignalDetailPage() {
   // Premium status does NOT unlock signals
   const isLocked = signal.isLocked
 
-  const potentialProfit = calculatePotentialProfit(signal)
-  const potentialLoss = calculatePotentialLoss(signal)
-  const riskRatio = calculateRiskRatio(signal)
+  // Use backend calculated values (null for locked signals)
+  const potentialProfit = signal.potentialProfit
+  const potentialLoss = signal.potentialLoss
+  const riskRatio = signal.riskRatio
   const finalPrice = getFinalPrice(signal)
   const hasInsufficientBalance = balance < finalPrice
 
@@ -440,18 +424,22 @@ export default function SignalDetailPage() {
               <div className="flex items-center justify-between rounded-lg bg-success/10 p-3">
                 <span className="text-sm text-muted-foreground">Potential Profit</span>
                 <span className="font-semibold text-success flex items-center gap-1">
-                  <TrendingUp className="h-4 w-4" />+{potentialProfit}%
+                  <TrendingUp className="h-4 w-4" />
+                  {potentialProfit !== null ? `+${potentialProfit}%` : "***"}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-destructive/10 p-3">
                 <span className="text-sm text-muted-foreground">Potential Loss</span>
                 <span className="font-semibold text-destructive flex items-center gap-1">
-                  <TrendingDown className="h-4 w-4" />-{potentialLoss}%
+                  <TrendingDown className="h-4 w-4" />
+                  {potentialLoss !== null ? `-${potentialLoss}%` : "***"}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="text-sm text-muted-foreground">Risk Ratio</span>
-                <span className="font-semibold">{riskRatio}:1</span>
+                <span className="font-semibold">
+                  {riskRatio !== null ? `${riskRatio}:1` : "***"}
+                </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="text-sm text-muted-foreground flex items-center gap-1">

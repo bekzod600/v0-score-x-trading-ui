@@ -47,28 +47,15 @@ interface SignalCardSignal {
   closedAt: string | null
   isLocked: boolean
   isPurchased: boolean
+  // Backend calculated fields
+  potentialProfit: number | null
+  potentialLoss: number | null
+  riskRatio: number | null
 }
 
 interface SignalCardProps {
   signal: SignalCardSignal
   isResult?: boolean
-}
-
-function calculatePotentialProfit(signal: SignalCardSignal): number {
-  if (!signal.entry || !signal.tp2) return 0
-  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
-}
-
-function calculatePotentialLoss(signal: SignalCardSignal): number {
-  if (!signal.entry || !signal.sl) return 0
-  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
-}
-
-function calculateRiskRatio(signal: SignalCardSignal): number {
-  const profit = calculatePotentialProfit(signal)
-  const loss = calculatePotentialLoss(signal)
-  if (loss === 0) return 0
-  return Number((profit / loss).toFixed(1))
 }
 
 function getFinalPrice(signal: SignalCardSignal): number {
@@ -113,9 +100,10 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
   // Premium status does NOT unlock signals
   const isLocked = signal.isLocked
 
-  const potentialProfit = calculatePotentialProfit(signal)
-  const potentialLoss = calculatePotentialLoss(signal)
-  const riskRatio = calculateRiskRatio(signal)
+  // Use backend calculated values (null for locked signals)
+  const potentialProfit = signal.potentialProfit
+  const potentialLoss = signal.potentialLoss
+  const riskRatio = signal.riskRatio
   const finalPrice = getFinalPrice(signal)
   const outcome = isResult ? getResultOutcome(signal) : null
 
@@ -187,18 +175,22 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                 <div className="rounded-md bg-success/10 px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.profit")}</div>
                   <div className="font-semibold text-success flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3" />+{potentialProfit}%
+                    <TrendingUp className="h-3 w-3" />
+                    {potentialProfit !== null ? `+${potentialProfit}%` : "***"}
                   </div>
                 </div>
                 <div className="rounded-md bg-destructive/10 px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.loss")}</div>
                   <div className="font-semibold text-destructive flex items-center gap-1">
-                    <TrendingDown className="h-3 w-3" />-{potentialLoss}%
+                    <TrendingDown className="h-3 w-3" />
+                    {potentialLoss !== null ? `-${potentialLoss}%` : "***"}
                   </div>
                 </div>
                 <div className="rounded-md bg-muted px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.risk")}</div>
-                  <div className="font-semibold">{riskRatio}:1</div>
+                  <div className="font-semibold">
+                    {riskRatio !== null ? `${riskRatio}:1` : "***"}
+                  </div>
                 </div>
               </div>
 

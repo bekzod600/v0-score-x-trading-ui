@@ -25,23 +25,6 @@ import { useUser } from "@/lib/user-context"
 import { listSignals, type ApiSignal } from "@/lib/services/signals-service"
 import { listFilters, createFilter, type SavedFilter } from "@/lib/services/filters-service"
 
-function calculatePotentialProfitFromApi(signal: ApiSignal): number {
-  if (!signal.entry || !signal.tp2) return 0
-  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
-}
-
-function calculatePotentialLossFromApi(signal: ApiSignal): number {
-  if (!signal.entry || !signal.sl) return 0
-  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
-}
-
-function calculateRiskRatioFromApi(signal: ApiSignal): number {
-  const profit = calculatePotentialProfitFromApi(signal)
-  const loss = calculatePotentialLossFromApi(signal)
-  if (loss === 0) return 0
-  return Number((profit / loss).toFixed(1))
-}
-
 function SignalsContent() {
   const searchParams = useSearchParams()
   const { t } = useI18n()
@@ -165,13 +148,13 @@ function SignalsContent() {
     }
 
     if (filters.minProfitPercent > 0) {
-      result = result.filter((s) => calculatePotentialProfitFromApi(s) >= filters.minProfitPercent)
+      result = result.filter((s) => (s.potentialProfit ?? 0) >= filters.minProfitPercent)
     }
     if (filters.maxLossPercent < 100) {
-      result = result.filter((s) => calculatePotentialLossFromApi(s) <= filters.maxLossPercent)
+      result = result.filter((s) => (s.potentialLoss ?? 0) <= filters.maxLossPercent)
     }
     if (filters.maxRiskRatio < 10) {
-      result = result.filter((s) => calculateRiskRatioFromApi(s) <= filters.maxRiskRatio)
+      result = result.filter((s) => (s.riskRatio ?? 0) <= filters.maxRiskRatio)
     }
 
     return result
@@ -230,6 +213,9 @@ function SignalsContent() {
       closedAt: apiSignal.closedAt,
       isLocked: apiSignal.isLocked,
       isPurchased: apiSignal.isPurchased,
+      potentialProfit: apiSignal.potentialProfit,
+      potentialLoss: apiSignal.potentialLoss,
+      riskRatio: apiSignal.riskRatio,
     }
   }
 
