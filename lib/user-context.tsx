@@ -11,6 +11,7 @@ import {
 } from "./services/subscriptions-service"
 import { addFavorite, removeFavorite, getMyFavorites } from "./services/favorites-service"
 import { rateTrader as rateTraderAPI } from "./services/ratings-service"
+import { getSubscriptionStatus, type SubscriptionStatus } from "./services/subscription-service"
 
 const TOKEN_STORAGE_KEY = "scorex_token"
 
@@ -71,6 +72,7 @@ interface UserState {
   isLoggedIn: boolean
   token: string | null
   isHydrating: boolean
+  subscription: SubscriptionStatus
 }
 
 interface UserContextType extends UserState {
@@ -101,6 +103,10 @@ interface UserContextType extends UserState {
   getVote: (signalId: string) => "like" | "dislike" | null
   // Getters
   getTraderWithUpdatedStats: (trader: Trader) => Trader
+  // Subscription
+  subscription: SubscriptionStatus
+  refreshSubscription: () => Promise<void>
+  hasPremiumAccess: boolean
 }
 
 const UserContext = createContext<UserContextType | null>(null)
@@ -121,6 +127,14 @@ const initialProfile: UserProfile = {
   subscribers: 0,
 }
 
+const initialSubscription: SubscriptionStatus = {
+  plan: "free",
+  expiresAt: null,
+  autoRenew: false,
+  isActive: false,
+  daysRemaining: null,
+}
+
 const initialState: UserState = {
   profile: initialProfile,
   favorites: [],
@@ -130,6 +144,7 @@ const initialState: UserState = {
   isLoggedIn: false,
   token: null,
   isHydrating: true,
+  subscription: initialSubscription,
 }
 
 interface AuthMeResponse {
@@ -147,6 +162,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [favoriteLoading, setFavoriteLoading] = useState<string | null>(null)
   const [ratingLoading, setRatingLoading] = useState<string | null>(null)
   const router = useRouter()
+
+  // Refresh subscription status from API
+  const refreshSubscription = useCallback(async () => {
+    if (!state.token) return
+    try {
+      const subStatus = await getSubscriptionStatus(state.token)
+      setState((prev) => ({ ...prev, subscription: subStatus }))
+    } catch {
+      // Silent fail
+    }
+  }, [state.token])
 
   const setToken = useCallback((token: string | null) => {
     setState((prev) => ({ ...prev, token }))
@@ -180,19 +206,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
         timeoutMs: 5000, // Shorter timeout for auth check
       })
 
-      // Fetch subscriptions and favorites after successful auth
+      // Fetch subscriptions, favorites, and subscription status after successful auth
       let subscriptions: Subscription[] = []
       let favorites: string[] = []
+      let subscriptionStatus: SubscriptionStatus = initialSubscription
       try {
-        const [subsResponse, favsResponse] = await Promise.all([
+        const [subsResponse, favsResponse, subStatus] = await Promise.all([
           getMySubscriptions(storedToken),
           getMyFavorites(storedToken),
+          getSubscriptionStatus(storedToken).catch(() => initialSubscription),
         ])
         subscriptions = (subsResponse?.subscriptions || []).map((sub) => ({
           traderId: sub.traderId,
           bellSetting: (sub.bellSetting || "all") as "all" | "personalized" | "none",
         }))
         favorites = (favsResponse?.signals || []).map((signal) => signal.id)
+        subscriptionStatus = subStatus
       } catch {
         // Silently fail - subscriptions/favorites will be empty
       }
@@ -204,6 +233,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isHydrating: false,
         subscriptions,
         favorites,
+        subscription: subscriptionStatus,
         profile: {
           ...prev.profile,
           ...(userData.id && { id: userData.id }),
@@ -489,6 +519,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         voteSignal,
         getVote,
         getTraderWithUpdatedStats,
+        subscription: state.subscription,
+        refreshSubscription,
+        hasPremiumAccess: state.subscription.isActive,
       }}
     >
       {children}
