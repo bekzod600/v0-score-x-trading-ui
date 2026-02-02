@@ -47,28 +47,15 @@ interface SignalCardSignal {
   closedAt: string | null
   isLocked: boolean
   isPurchased: boolean
+  // Backend calculated fields (always present)
+  potentialProfit: number
+  potentialLoss: number
+  riskRatio: number
 }
 
 interface SignalCardProps {
   signal: SignalCardSignal
   isResult?: boolean
-}
-
-function calculatePotentialProfit(signal: SignalCardSignal): number {
-  if (!signal.entry || !signal.tp2) return 0
-  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
-}
-
-function calculatePotentialLoss(signal: SignalCardSignal): number {
-  if (!signal.entry || !signal.sl) return 0
-  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
-}
-
-function calculateRiskRatio(signal: SignalCardSignal): number {
-  const profit = calculatePotentialProfit(signal)
-  const loss = calculatePotentialLoss(signal)
-  if (loss === 0) return 0
-  return Number((profit / loss).toFixed(1))
 }
 
 function getFinalPrice(signal: SignalCardSignal): number {
@@ -113,9 +100,10 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
   // Premium status does NOT unlock signals
   const isLocked = signal.isLocked
 
-  const potentialProfit = calculatePotentialProfit(signal)
-  const potentialLoss = calculatePotentialLoss(signal)
-  const riskRatio = calculateRiskRatio(signal)
+  // Use backend calculated values (null for locked signals)
+  const potentialProfit = signal.potentialProfit
+  const potentialLoss = signal.potentialLoss
+  const riskRatio = signal.riskRatio
   const finalPrice = getFinalPrice(signal)
   const outcome = isResult ? getResultOutcome(signal) : null
 
@@ -182,7 +170,7 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                 <StatusBadge status={signal.status as any} />
               </div>
 
-              {/* Summary Stats */}
+              {/* Summary Stats - Always shown, even for locked signals */}
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div className="rounded-md bg-success/10 px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.profit")}</div>
