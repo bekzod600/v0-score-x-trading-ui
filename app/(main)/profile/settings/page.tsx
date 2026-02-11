@@ -58,6 +58,9 @@ export default function ProfileSettingsPage() {
     logo: "",
   })
 
+  // During SSR prerendering, profile may be null
+  if (!profile) return null
+
   const userCenter = getUserCenter(profile.id)
 
   const handleLogout = () => {

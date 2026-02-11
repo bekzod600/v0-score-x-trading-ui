@@ -21,11 +21,16 @@ export default function EditProfilePage() {
   const { addNotification } = useWallet()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [displayName, setDisplayName] = useState(profile.displayName)
-  const [username, setUsername] = useState(profile.username)
-  const [bio, setBio] = useState(profile.bio)
-  const [avatarPreview, setAvatarPreview] = useState(profile.avatar)
+  const [displayName, setDisplayName] = useState(profile?.displayName ?? "")
+  const [username, setUsername] = useState(profile?.username ?? "")
+  const [bio, setBio] = useState(profile?.bio ?? "")
+  const [avatarPreview, setAvatarPreview] = useState(profile?.avatar ?? "")
   const [isSaving, setIsSaving] = useState(false)
+
+  // During SSR prerendering, profile may be null
+  if (!profile) {
+    return null
+  }
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

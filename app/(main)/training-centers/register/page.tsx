@@ -32,6 +32,9 @@ export default function RegisterCenterPage() {
   })
   const [submitted, setSubmitted] = useState(false)
 
+  // During SSR prerendering, profile may be null
+  if (!profile) return null
+
   // Check if user already has a center
   const existingCenter = getUserCenter(profile.id)
 

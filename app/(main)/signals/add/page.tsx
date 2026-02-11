@@ -89,6 +89,9 @@ export default function AddSignalPage() {
     fetchUserSignals()
   }, [token])
 
+  // During SSR prerendering, profile may be null
+  if (!profile) return null
+
   const freeSignalsCount = userSignals.filter((s) => s.isFree).length
   const scoreXPoints = profile.scoreXPoints
 

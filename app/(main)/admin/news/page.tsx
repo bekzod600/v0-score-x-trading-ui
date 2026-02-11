@@ -43,6 +43,9 @@ export default function AdminNewsPage() {
   const [form, setForm] = useState<NewsForm>(emptyForm)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  // During SSR prerendering, profile may be null
+  if (!profile) return null
+
   if (!isAdmin) {
     router.push("/admin")
     return null
