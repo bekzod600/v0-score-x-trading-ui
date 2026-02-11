@@ -301,15 +301,36 @@ export function UserProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ==========================================
-// HOOK
-// ==========================================
+// Safe no-op defaults for prerendering (when UserProvider is not mounted yet)
+const noop = () => {}
+const noopAsync = async () => {}
 
-export function useUser(): UserContextType {
-  const context = useContext(UserContext);
-  
+const fallbackContext: UserContextType = {
+  profile: null,
+  isLoggedIn: false,
+  token: null,
+  isHydrating: true,
+  isWebApp: false,
+  setToken: noop as (token: string | null) => void,
+  setProfile: noop as (profile: AuthUser | null) => void,
+  hydrateAuth: noopAsync,
+  logout: noop,
+  requireAuth: () => false,
+  favorites: [],
+  subscriptions: [],
+  ratings: {},
+  votes: {},
+  toggleFavorite: noop as (signalId: string) => void,
+  toggleSubscription: noop as (traderId: string) => void,
+  setRating: noop as (traderId: string, rating: number) => void,
+  setVote: noop as (signalId: string, vote: 'up' | 'down' | null) => void,
+}
+
+export function useUser() {
+  const context = useContext(UserContext)
   if (!context) {
-    throw new Error('useUser must be used within a UserProvider');
+    // During SSR prerendering, return safe defaults instead of throwing
+    return fallbackContext
   }
   
   return context;

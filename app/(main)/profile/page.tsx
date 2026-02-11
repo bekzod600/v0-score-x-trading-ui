@@ -31,6 +31,9 @@ function ProfileContent() {
   const { profile, favorites, isLoggedIn, token } = useUser()
   const { balance } = useWallet()
 
+  // During SSR prerendering, profile may be null
+  if (!profile) return null
+
   // State for user signals from API
   const [userSignals, setUserSignals] = useState<ApiSignal[]>([])
   const [isLoadingSignals, setIsLoadingSignals] = useState(true)
