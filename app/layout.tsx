@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import Script from "next/script"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 
@@ -49,6 +50,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+      </head>
       <body className={`${inter.className} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           {children}

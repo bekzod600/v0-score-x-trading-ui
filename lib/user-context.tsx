@@ -105,34 +105,56 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (inWebApp) {
         console.log('[Auth] Running inside Telegram WebApp');
         
-        try {
-          // WebApp initData orqali auth
-          const initData = window.Telegram!.WebApp!.initData;
-          const result = await authenticateWebApp(initData);
-          
-          if (result.success && result.accessToken) {
-            console.log('[Auth] WebApp auth successful');
-            
-            // Token saqlash
-            setToken(result.accessToken);
-            
-            // User ma'lumotlarini olish
-            const user = await getCurrentUser(result.accessToken);
+        // Avval localStorage da token bormi tekshirish (tezroq)
+        const storedToken = localStorage.getItem('scorex_token');
+        
+        if (storedToken) {
+          console.log('[Auth] WebApp: Found stored token, validating...');
+          try {
+            const user = await getCurrentUser(storedToken);
+            setTokenState(storedToken);
+            setToken(storedToken);
             setProfile(user);
-            
-            // WebApp ni ready qilish
+            console.log('[Auth] WebApp: Stored token valid, user:', user.id);
             markWebAppReady();
             expandWebApp();
-            
             return;
+          } catch (err) {
+            console.log('[Auth] WebApp: Stored token invalid, trying initData auth...');
+            localStorage.removeItem('scorex_token');
+          }
+        }
+        
+        // Stored token yo'q yoki yaroqsiz — initData bilan auth
+        try {
+          const initData = window.Telegram!.WebApp!.initData;
+          
+          if (initData && initData.length > 0) {
+            const result = await authenticateWebApp(initData);
+            
+            if (result.success && result.accessToken) {
+              console.log('[Auth] WebApp auth successful');
+              setToken(result.accessToken);
+              
+              const user = await getCurrentUser(result.accessToken);
+              setProfile(user);
+              
+              markWebAppReady();
+              expandWebApp();
+              return;
+            }
           }
         } catch (webAppError) {
-          console.error('[Auth] WebApp auth failed:', webAppError);
-          // WebApp auth ishlamasa, localStorage ga fallback
+          console.error('[Auth] WebApp initData auth failed:', webAppError);
         }
+        
+        // Hech narsa ishlamadi — ready qilish (auth bo'lmasa ham)
+        markWebAppReady();
+        expandWebApp();
+        return;
       }
       
-      // 2. LocalStorage dan token olish (website uchun yoki WebApp fallback)
+      // 2. Website: localStorage dan token olish
       const storedToken = typeof window !== 'undefined' 
         ? localStorage.getItem('scorex_token') 
         : null;
@@ -145,26 +167,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
           const user = await getCurrentUser(storedToken);
           setProfile(user);
           console.log('[Auth] Token validated, user:', user.id);
-          
-          // WebApp da bo'lsak, ready qilish
-          if (inWebApp) {
-            markWebAppReady();
-            expandWebApp();
-          }
         } catch (error) {
           console.error('[Auth] Token validation failed:', error);
-          // Token noto'g'ri - tozalash
           setToken(null);
           setProfile(null);
         }
       } else {
         console.log('[Auth] No stored token found');
-        
-        // WebApp da bo'lsak, ready qilish (auth bo'lmasa ham)
-        if (inWebApp) {
-          markWebAppReady();
-          expandWebApp();
-        }
       }
     } catch (error) {
       console.error('[Auth] Hydration error:', error);

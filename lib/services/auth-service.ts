@@ -53,8 +53,10 @@ export interface WebAppAuthResponse {
  * Deep link va login ID qaytaradi
  */
 export async function initiateTelegramLogin(): Promise<TelegramLoginResponse> {
-  return apiRequest('/auth/telegram/initiate', {
+  return apiRequest<TelegramLoginResponse>({
     method: 'POST',
+    path: '/auth/telegram/initiate',
+    timeoutMs: 10000,
   });
 }
 
@@ -63,7 +65,11 @@ export async function initiateTelegramLogin(): Promise<TelegramLoginResponse> {
  * WebSocket ishlamasa shu ishlatiladi
  */
 export async function getTelegramStatus(loginId: string): Promise<TelegramStatusResponse> {
-  return apiRequest(`/auth/telegram/status/${loginId}`);
+  return apiRequest<TelegramStatusResponse>({
+    method: 'GET',
+    path: `/auth/telegram/status/${loginId}`,
+    timeoutMs: 5000,
+  });
 }
 
 /**
@@ -71,13 +77,11 @@ export async function getTelegramStatus(loginId: string): Promise<TelegramStatus
  * JWT token bilan chaqiriladi
  */
 export async function getCurrentUser(token?: string): Promise<AuthUser> {
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
-  return apiRequest('/auth/me', {
-    headers,
+  return apiRequest<AuthUser>({
+    method: 'GET',
+    path: '/auth/me',
+    token: token || undefined,
+    timeoutMs: 5000,
   });
 }
 
@@ -98,9 +102,11 @@ export async function getCurrentUser(token?: string): Promise<AuthUser> {
  * }
  */
 export async function authenticateWebApp(initData: string): Promise<WebAppAuthResponse> {
-  return apiRequest('/auth/telegram/webapp', {
+  return apiRequest<WebAppAuthResponse>({
     method: 'POST',
-    body: JSON.stringify({ initData }),
+    path: '/auth/telegram/webapp',
+    body: { initData },
+    timeoutMs: 10000,
   });
 }
 
