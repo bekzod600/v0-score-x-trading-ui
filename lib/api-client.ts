@@ -15,7 +15,7 @@ export interface ApiRequestOptions {
   timeoutMs?: number
 }
 
-export async function apiRequest<T>(p0: string, p1: { method: string; body: string }, opts: ApiRequestOptions): Promise<T> {
+export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
   const { method, path, token, body, headers: customHeaders, timeoutMs = 15000 } = opts
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`

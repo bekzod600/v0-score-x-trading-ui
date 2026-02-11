@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Lock, Heart, ThumbsUp, ThumbsDown, TrendingUp, TrendingDown, Clock, Eye, Loader2 } from "lucide-react"
+import { Lock, Heart, ThumbsUp, ThumbsDown, TrendingUp, TrendingDown, Clock, Eye } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -85,16 +85,19 @@ function getResultOutcome(signal: SignalCardSignal): { type: "profit" | "loss" |
 }
 
 export function SignalCard({ signal, isResult = false }: SignalCardProps) {
-  const { isFavorite, toggleFavorite, favoriteLoading, getVote, isLoggedIn, token } = useUser()
+  const { favorites, toggleFavorite, votes, isLoggedIn, token } = useUser()
   const { t } = useI18n()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isVoting, setIsVoting] = useState(false)
   const [likes, setLikes] = useState(signal.likes)
   const [dislikes, setDislikes] = useState(signal.dislikes)
-  const [userVote, setUserVote] = useState<"like" | "dislike" | null>(getVote(signal.id))
 
-  const favorite = isFavorite(signal.id)
-  const isFavoriteLoading = favoriteLoading === signal.id
+  // Map votes record format ('up'/'down') to component format ('like'/'dislike')
+  const currentVote = votes[signal.id]
+  const mappedVote: "like" | "dislike" | null = currentVote === "up" ? "like" : currentVote === "down" ? "dislike" : null
+  const [userVote, setUserVote] = useState<"like" | "dislike" | null>(mappedVote)
+
+  const favorite = favorites.includes(signal.id)
 
   // Backend rule: isLocked = !isFree && !isPurchased
   // Premium status does NOT unlock signals
@@ -316,18 +319,12 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
               </button>
               <button
                 onClick={handleFavorite}
-                disabled={isFavoriteLoading}
                 className={cn(
                   "flex items-center text-sm transition-colors",
                   favorite ? "text-destructive" : "text-muted-foreground hover:text-foreground",
-                  isFavoriteLoading && "opacity-50 cursor-not-allowed"
                 )}
               >
-                {isFavoriteLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Heart className={cn("h-4 w-4", favorite && "fill-current")} />
-                )}
+                <Heart className={cn("h-4 w-4", favorite && "fill-current")} />
               </button>
             </div>
 
