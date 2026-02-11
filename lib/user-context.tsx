@@ -302,38 +302,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
 }
 
 // Safe no-op defaults for prerendering (when UserProvider is not mounted yet)
+const noop = () => {}
 const noopAsync = async () => {}
-const noopTrader = (trader: Trader) => trader
 
 const fallbackContext: UserContextType = {
-  profile: initialProfile,
-  favorites: [],
-  subscriptions: [],
-  ratings: [],
-  votes: [],
+  profile: null,
   isLoggedIn: false,
   token: null,
   isHydrating: true,
-  // Actions (no-ops)
+  isWebApp: false,
+  setToken: noop as (token: string | null) => void,
+  setProfile: noop as (profile: AuthUser | null) => void,
   hydrateAuth: noopAsync,
-  logout: noopAsync as () => void,
-  toggleFavorite: noopAsync as (id: string) => Promise<void>,
-  isFavorite: () => false,
-  favoriteLoading: null,
-  toggleSubscription: noopAsync as (id: string, username: string) => Promise<void>,
-  isSubscribed: () => false,
-  subscriptionLoading: null,
-  getSubscriptionBell: () => "all" as const,
-  updateBellSetting: noopAsync as (id: string, setting: "all" | "personalized" | "none") => Promise<void>,
-  rateTrader: noopAsync as (id: string, username: string, stars: number) => Promise<void>,
-  getUserRating: () => 0,
-  ratingLoading: null,
-  voteSignal: noopAsync as (id: string, type: "up" | "down") => Promise<void>,
-  getVote: () => null,
-  getTraderWithUpdatedStats: noopTrader,
-  subscription: initialSubscription,
-  refreshSubscription: noopAsync,
-  hasPremiumAccess: false,
+  logout: noop,
+  requireAuth: () => false,
+  favorites: [],
+  subscriptions: [],
+  ratings: {},
+  votes: {},
+  toggleFavorite: noop as (signalId: string) => void,
+  toggleSubscription: noop as (traderId: string) => void,
+  setRating: noop as (traderId: string, rating: number) => void,
+  setVote: noop as (signalId: string, vote: 'up' | 'down' | null) => void,
 }
 
 export function useUser() {
