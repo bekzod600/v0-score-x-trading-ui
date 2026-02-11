@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Lock, Heart, ThumbsUp, ThumbsDown, TrendingUp, TrendingDown, Clock, Eye } from "lucide-react"
+import { Lock, Heart, ThumbsUp, ThumbsDown, TrendingUp, TrendingDown, Clock, Eye, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +13,7 @@ import { HalalBadges } from "./halal-badges"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
 import { LoginRequiredModal } from "@/components/auth/login-required-modal"
+import { voteSignal as voteSignalAPI, removeVote } from "@/lib/services/ratings-service"
 
 interface SignalCardSignal {
   id: string
@@ -46,28 +47,15 @@ interface SignalCardSignal {
   closedAt: string | null
   isLocked: boolean
   isPurchased: boolean
+  // Backend calculated fields (always present)
+  potentialProfit: number
+  potentialLoss: number
+  riskRatio: number
 }
 
 interface SignalCardProps {
   signal: SignalCardSignal
   isResult?: boolean
-}
-
-function calculatePotentialProfit(signal: SignalCardSignal): number {
-  if (!signal.entry || !signal.tp2) return 0
-  return Number((((signal.tp2 - signal.entry) / signal.entry) * 100).toFixed(1))
-}
-
-function calculatePotentialLoss(signal: SignalCardSignal): number {
-  if (!signal.entry || !signal.sl) return 0
-  return Number((((signal.entry - signal.sl) / signal.entry) * 100).toFixed(1))
-}
-
-function calculateRiskRatio(signal: SignalCardSignal): number {
-  const profit = calculatePotentialProfit(signal)
-  const loss = calculatePotentialLoss(signal)
-  if (loss === 0) return 0
-  return Number((profit / loss).toFixed(1))
 }
 
 function getFinalPrice(signal: SignalCardSignal): number {
@@ -97,35 +85,57 @@ function getResultOutcome(signal: SignalCardSignal): { type: "profit" | "loss" |
 }
 
 export function SignalCard({ signal, isResult = false }: SignalCardProps) {
-  const { isFavorite, toggleFavorite, voteSignal, getVote, isLoggedIn } = useUser()
+  const { isFavorite, toggleFavorite, favoriteLoading, getVote, isLoggedIn, token } = useUser()
   const { t } = useI18n()
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [isVoting, setIsVoting] = useState(false)
+  const [likes, setLikes] = useState(signal.likes)
+  const [dislikes, setDislikes] = useState(signal.dislikes)
+  const [userVote, setUserVote] = useState<"like" | "dislike" | null>(getVote(signal.id))
 
   const favorite = isFavorite(signal.id)
-  const userVote = getVote(signal.id)
+  const isFavoriteLoading = favoriteLoading === signal.id
 
   // Backend rule: isLocked = !isFree && !isPurchased
   // Premium status does NOT unlock signals
   const isLocked = signal.isLocked
 
-  const potentialProfit = calculatePotentialProfit(signal)
-  const potentialLoss = calculatePotentialLoss(signal)
-  const riskRatio = calculateRiskRatio(signal)
+  // Use backend calculated values (null for locked signals)
+  const potentialProfit = signal.potentialProfit
+  const potentialLoss = signal.potentialLoss
+  const riskRatio = signal.riskRatio
   const finalPrice = getFinalPrice(signal)
   const outcome = isResult ? getResultOutcome(signal) : null
 
-  // Calculate display likes/dislikes based on user vote
-  let displayLikes = signal.likes
-  let displayDislikes = signal.dislikes
-  if (userVote === "like") displayLikes += 1
-  if (userVote === "dislike") displayDislikes += 1
-
-  const handleVote = (vote: "like" | "dislike") => {
+  const handleVote = async (voteType: "like" | "dislike") => {
     if (!isLoggedIn) {
       setShowLoginModal(true)
       return
     }
-    voteSignal(signal.id, vote)
+    if (!token || isVoting) return
+
+    setIsVoting(true)
+    try {
+      // If already voted same way, remove vote
+      if (userVote === voteType) {
+        await removeVote(signal.id, token)
+        setUserVote(null)
+        if (voteType === "like") setLikes(prev => prev - 1)
+        else setDislikes(prev => prev - 1)
+      } else {
+        // New vote or change vote
+        const result = await voteSignalAPI(signal.id, voteType, token)
+        
+        // Update counts from server response
+        setLikes(result.likes)
+        setDislikes(result.dislikes)
+        setUserVote(voteType)
+      }
+    } catch (err) {
+      // Silently fail - user can retry
+    } finally {
+      setIsVoting(false)
+    }
   }
 
   const handleFavorite = () => {
@@ -160,7 +170,7 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
                 <StatusBadge status={signal.status as any} />
               </div>
 
-              {/* Summary Stats */}
+              {/* Summary Stats - Always shown, even for locked signals */}
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div className="rounded-md bg-success/10 px-2 py-1.5">
                   <div className="text-xs text-muted-foreground">{t("signals.profit")}</div>
@@ -284,32 +294,40 @@ export function SignalCard({ signal, isResult = false }: SignalCardProps) {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => handleVote("like")}
+                disabled={isVoting}
                 className={cn(
-                  "flex items-center gap-1 text-sm transition-colors",
+                  "flex items-center gap-1 text-sm transition-colors disabled:opacity-50",
                   userVote === "like" ? "text-success" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <ThumbsUp className={cn("h-4 w-4", userVote === "like" && "fill-current")} />
-                <span className="text-xs">{displayLikes}</span>
+                <span className="text-xs">{likes}</span>
               </button>
               <button
                 onClick={() => handleVote("dislike")}
+                disabled={isVoting}
                 className={cn(
-                  "flex items-center gap-1 text-sm transition-colors",
+                  "flex items-center gap-1 text-sm transition-colors disabled:opacity-50",
                   userVote === "dislike" ? "text-destructive" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <ThumbsDown className={cn("h-4 w-4", userVote === "dislike" && "fill-current")} />
-                <span className="text-xs">{displayDislikes}</span>
+                <span className="text-xs">{dislikes}</span>
               </button>
               <button
                 onClick={handleFavorite}
+                disabled={isFavoriteLoading}
                 className={cn(
                   "flex items-center text-sm transition-colors",
                   favorite ? "text-destructive" : "text-muted-foreground hover:text-foreground",
+                  isFavoriteLoading && "opacity-50 cursor-not-allowed"
                 )}
               >
-                <Heart className={cn("h-4 w-4", favorite && "fill-current")} />
+                {isFavoriteLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Heart className={cn("h-4 w-4", favorite && "fill-current")} />
+                )}
               </button>
             </div>
 

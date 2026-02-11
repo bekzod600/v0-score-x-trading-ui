@@ -79,13 +79,13 @@ REQUIRED CHANGES:
    - Better error messages for CORS issues
 
 9. CREATE WebSocket Hook (lib/hooks/use-websocket.ts):
-```typescript
+\`\`\`typescript
    export function useAuthWebSocket(loginId: string, onConfirmed: (data) => void) {
      // Connect to /auth namespace
      // Subscribe to login_confirmed event
      // Handle disconnection
      // Cleanup on unmount
    }
-```
+\`\`\`
 
 10. ENVIRONMENT VARIABLES (.env.local):

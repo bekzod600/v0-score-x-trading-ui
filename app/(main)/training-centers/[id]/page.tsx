@@ -1,8 +1,8 @@
 "use client"
 
-import { use, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { ArrowLeft, MapPin, Star, Users, Phone, Send, Globe, CheckCircle, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -14,8 +14,9 @@ import { useAdmin } from "@/lib/admin-context"
 import { useUser } from "@/lib/user-context"
 import { useToast } from "@/lib/toast-context"
 
-export default function TrainingCenterDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function TrainingCenterDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const { trainingCenters, markStudiedAt, hasStudiedAt, rateCenter } = useAdmin()
   const { isLoggedIn } = useUser()

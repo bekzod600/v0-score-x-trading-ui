@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/lib/toast-context"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
-import { getMySignals, type ApiSignal } from "@/lib/services/signals-service"
+import { getMySignals, createSignal, type ApiSignal, type CreateSignalPayload } from "@/lib/services/signals-service"
 
 interface FormErrors {
   ticker?: string
@@ -240,19 +240,47 @@ export default function AddSignalPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
+    if (!token) {
+      showToast("Please login first", "error")
+      return
+    }
+
     if (!validateForm()) {
       showToast("Please fix the errors in the form", "error")
       return
     }
 
     setIsSubmitting(true)
+    setErrors({})
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const payload: CreateSignalPayload = {
+        ticker: ticker.toUpperCase().trim(),
+        ep: Number(entry),
+        sl: Number(sl),
+        tp1: Number(tp1),
+        tp2: tp2 ? Number(tp2) : undefined,
+        accessType: signalType === "paid" ? "PAID" : "FREE",
+        price: signalType === "paid" ? Number(price) : undefined,
+      }
 
-    showToast("Your signal has been published successfully", "success")
-    setIsSubmitting(false)
-    router.push("/signals")
+      console.log("[v0] Creating signal with payload:", payload)
+      console.log("[v0] Token available:", !!token)
+
+      const result = await createSignal(payload, token)
+      
+      console.log("[v0] Create signal result:", result)
+
+      showToast("Your signal has been published successfully", "success")
+      router.push(`/signals/${result.id}`)
+    } catch (err) {
+      console.log("[v0] Create signal error:", err)
+      const errorMessage = err instanceof Error ? err.message : "Failed to create signal. Please try again."
+      setErrors({ general: errorMessage })
+      showToast(errorMessage, "error")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (!isLoggedIn) {
@@ -278,6 +306,14 @@ export default function AddSignalPage() {
           </CardHeader>
           <CardContent>
             <form className="space-y-6" onSubmit={handleSubmit}>
+              {/* General error message */}
+              {errors.general && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {errors.general}
+                </div>
+              )}
+
               {/* Ticker with Yahoo validation */}
               <FormField label="Ticker Symbol" htmlFor="ticker" error={errors.ticker} required>
                 <div className="relative">

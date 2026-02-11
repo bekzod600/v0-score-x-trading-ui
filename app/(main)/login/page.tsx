@@ -293,14 +293,8 @@ export default function LoginPage() {
           )}
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-4">
-          <p className="text-center text-sm text-muted-foreground">
-            {t("auth.noAccount")}{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              {t("auth.register")}
-            </Link>
-          </p>
-          <p className="text-center text-xs text-muted-foreground">
+        <CardFooter>
+          <p className="w-full text-center text-xs text-muted-foreground">
             By signing in, you agree to our{" "}
             <Link href="/terms" className="underline hover:text-foreground">
               Terms of Service

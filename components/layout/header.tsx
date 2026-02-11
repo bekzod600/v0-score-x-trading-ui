@@ -28,7 +28,6 @@ function HeaderContent() {
   const navItems = [
     { href: "/", label: t("nav.home") },
     { href: "/signals", label: t("nav.signals") },
-    { href: "/signals?tab=results", label: t("nav.results") },
     { href: "/rating", label: t("nav.rating") },
     { href: "/training-centers", label: t("nav.training") },
     { href: "/news", label: t("nav.news") },
@@ -117,19 +116,12 @@ function HeaderContent() {
               </Link>
             </>
           ) : (
-            <>
-              <Link href="/login">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <LogIn className="h-4 w-4" />
-                  {t("auth.login")}
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  {t("auth.register")}
-                </Button>
-              </Link>
-            </>
+            <Link href="/login">
+              <Button size="sm" className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                <LogIn className="h-4 w-4" />
+                {t("auth.login")}
+              </Button>
+            </Link>
           )}
         </div>
 
@@ -205,17 +197,12 @@ function HeaderContent() {
                   </Link>
                 </>
               ) : (
-                <>
-                  <Link href="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" className="w-full bg-transparent">
-                      <LogIn className="mr-2 h-4 w-4" />
-                      {t("auth.login")}
-                    </Button>
-                  </Link>
-                  <Link href="/register" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
-                    <Button className="w-full">{t("auth.register")}</Button>
-                  </Link>
-                </>
+                <Link href="/login" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    {t("auth.login")}
+                  </Button>
+                </Link>
               )}
             </div>
           </nav>

@@ -35,6 +35,10 @@ export interface ApiSignal {
   closedAt: string | null
   isLocked: boolean
   isPurchased: boolean
+  // Backend calculated fields (ALWAYS present, even for locked signals)
+  potentialProfit: number  // e.g. 15.5 means +15.5%
+  potentialLoss: number    // e.g. 5.2 means -5.2%
+  riskRatio: number        // e.g. 2.98 means 2.98:1
 }
 
 export interface SignalsListResponse {
@@ -48,6 +52,23 @@ export interface BuySignalResponse {
   success: boolean
   message: string
   newBalance?: number
+}
+
+export interface CreateSignalPayload {
+  ticker: string
+  ep: number        // entry price
+  sl: number        // stop loss
+  tp1: number       // take profit 1
+  tp2?: number      // take profit 2 (optional)
+  accessType: "FREE" | "PAID"
+  price?: number    // required if PAID
+}
+
+export interface CreateSignalResponse {
+  id: string
+  ticker: string
+  status: string
+  createdAt: string
 }
 
 // Raw API response format (snake_case from backend)
@@ -83,6 +104,13 @@ interface RawApiSignal {
   is_locked?: boolean
   is_purchased?: boolean
   isPurchased?: boolean
+  // Backend calculated fields (always present)
+  potential_profit?: number
+  potentialProfit?: number
+  potential_loss?: number
+  potentialLoss?: number
+  risk_ratio?: number
+  riskRatio?: number
 }
 
 interface RawApiTrader {
@@ -208,6 +236,10 @@ function normalizeSignal(raw: RawApiSignal): ApiSignal {
     closedAt: raw.closedAt ?? raw.closed_at ?? null,
     isLocked,
     isPurchased,
+    // Backend calculated fields (always present)
+    potentialProfit: toNumber(raw.potentialProfit ?? raw.potential_profit),
+    potentialLoss: toNumber(raw.potentialLoss ?? raw.potential_loss),
+    riskRatio: toNumber(raw.riskRatio ?? raw.risk_ratio),
   }
 }
 
@@ -413,4 +445,23 @@ export async function getMySignals(token: string, params?: {
     .map(normalizeSignal)
 
   return { signals, total, page: 1, limit: 50 }
+}
+
+/**
+ * Create a new signal
+ * POST /signals
+ * No mock data fallback - throws on API error
+ * Requires authentication
+ */
+export async function createSignal(
+  payload: CreateSignalPayload,
+  token: string
+): Promise<CreateSignalResponse> {
+  return await apiRequest<CreateSignalResponse>({
+    method: "POST",
+    path: "/signals",
+    token,
+    body: payload,
+    timeoutMs: 10000,
+  })
 }
