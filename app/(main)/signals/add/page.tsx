@@ -264,17 +264,11 @@ export default function AddSignalPage() {
         price: signalType === "paid" ? Number(price) : undefined,
       }
 
-      console.log("[v0] Creating signal with payload:", payload)
-      console.log("[v0] Token available:", !!token)
-
       const result = await createSignal(payload, token)
-      
-      console.log("[v0] Create signal result:", result)
 
       showToast("Your signal has been published successfully", "success")
       router.push(`/signals/${result.id}`)
     } catch (err) {
-      console.log("[v0] Create signal error:", err)
       const errorMessage = err instanceof Error ? err.message : "Failed to create signal. Please try again."
       setErrors({ general: errorMessage })
       showToast(errorMessage, "error")

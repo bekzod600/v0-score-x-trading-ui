@@ -529,10 +529,46 @@ export function UserProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// Safe no-op defaults for prerendering (when UserProvider is not mounted yet)
+const noopAsync = async () => {}
+const noopTrader = (trader: Trader) => trader
+
+const fallbackContext: UserContextType = {
+  profile: initialProfile,
+  favorites: [],
+  subscriptions: [],
+  ratings: [],
+  votes: [],
+  isLoggedIn: false,
+  token: null,
+  isHydrating: true,
+  // Actions (no-ops)
+  hydrateAuth: noopAsync,
+  logout: noopAsync as () => void,
+  toggleFavorite: noopAsync as (id: string) => Promise<void>,
+  isFavorite: () => false,
+  favoriteLoading: null,
+  toggleSubscription: noopAsync as (id: string, username: string) => Promise<void>,
+  isSubscribed: () => false,
+  subscriptionLoading: null,
+  getSubscriptionBell: () => "all" as const,
+  updateBellSetting: noopAsync as (id: string, setting: "all" | "personalized" | "none") => Promise<void>,
+  rateTrader: noopAsync as (id: string, username: string, stars: number) => Promise<void>,
+  getUserRating: () => 0,
+  ratingLoading: null,
+  voteSignal: noopAsync as (id: string, type: "up" | "down") => Promise<void>,
+  getVote: () => null,
+  getTraderWithUpdatedStats: noopTrader,
+  subscription: initialSubscription,
+  refreshSubscription: noopAsync,
+  hasPremiumAccess: false,
+}
+
 export function useUser() {
   const context = useContext(UserContext)
   if (!context) {
-    throw new Error("useUser must be used within a UserProvider")
+    // During SSR prerendering, return safe defaults instead of throwing
+    return fallbackContext
   }
   return context
 }
