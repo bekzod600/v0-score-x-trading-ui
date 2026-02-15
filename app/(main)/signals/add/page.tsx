@@ -37,7 +37,7 @@ interface TickerValidation {
 export default function AddSignalPage() {
   const router = useRouter()
   const { showToast } = useToast()
-  const { isLoggedIn, profile, token } = useUser()
+  const { isLoggedIn, isHydrating, isWebApp, profile, token } = useUser()
   const { t } = useI18n()
 
   // Form state
@@ -62,12 +62,12 @@ export default function AddSignalPage() {
     error: null,
   })
 
-  // Redirect if not logged in
+  // Redirect if not logged in (skip in WebApp mode)
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isHydrating && !isLoggedIn && !isWebApp) {
       router.push("/login")
     }
-  }, [isLoggedIn, router])
+  }, [isLoggedIn, isHydrating, isWebApp, router])
 
   // Fetch user's signals from API
   useEffect(() => {
