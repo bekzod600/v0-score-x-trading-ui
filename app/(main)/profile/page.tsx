@@ -28,7 +28,7 @@ function ProfileContent() {
   const tab = searchParams.get("tab") || "signals"
   const { t } = useI18n()
 
-  const { profile, favorites, isLoggedIn, token } = useUser()
+  const { profile, favorites, isLoggedIn, isHydrating, isWebApp, token } = useUser()
   const { balance } = useWallet()
 
   // During SSR prerendering, profile may be null
@@ -49,10 +49,10 @@ function ProfileContent() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isHydrating && !isLoggedIn && !isWebApp) {
       router.push("/login")
     }
-  }, [isLoggedIn, router])
+  }, [isLoggedIn, isHydrating, isWebApp, router])
 
   // Fetch user's signals from API
   useEffect(() => {

@@ -43,7 +43,7 @@ import { LanguageSwitcherMobile } from "@/components/layout/language-switcher"
 export default function ProfileSettingsPage() {
   const router = useRouter()
   const { getUserCenter, updateCenter, setRole, currentUserRole, isAdmin } = useAdmin()
-  const { profile, logout, isLoggedIn } = useUser()
+  const { profile, logout, isLoggedIn, isHydrating, isWebApp } = useUser()
   const { theme, setTheme } = useTheme()
   const { t } = useI18n()
   const { showToast } = useToast()
@@ -91,8 +91,8 @@ export default function ProfileSettingsPage() {
     }
   }
 
-  // Redirect guests to login
-  if (!isLoggedIn) {
+  // Redirect guests to login (skip in WebApp mode or while hydrating)
+  if (!isHydrating && !isLoggedIn && !isWebApp) {
     router.push("/login")
     return null
   }
