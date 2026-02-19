@@ -1,34 +1,44 @@
 import { put } from "@vercel/blob"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 
-export const runtime = "edge"
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData()
+    const file = formData.get("file") as File
 
-export async function POST(request: Request): Promise<NextResponse> {
-  const { searchParams } = new URL(request.url)
-  const filename = searchParams.get("filename")
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 })
+    }
 
-  if (!filename) {
-    return NextResponse.json({ error: "filename required" }, { status: 400 })
+    // Only allow image formats
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if (!allowed.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Only image files allowed (jpg, png, webp, gif)" },
+        { status: 400 }
+      )
+    }
+
+    // 4 MB limit
+    if (file.size > 4 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "File must be under 4 MB" },
+        { status: 400 }
+      )
+    }
+
+    const blob = await put(file.name, file, {
+      access: "public",
+    })
+
+    return NextResponse.json({
+      url: blob.url,
+      pathname: blob.pathname,
+      contentType: file.type,
+      contentDisposition: blob.contentDisposition,
+    })
+  } catch (error) {
+    console.error("Upload error:", error)
+    return NextResponse.json({ error: "Upload failed" }, { status: 500 })
   }
-
-  if (!request.body) {
-    return NextResponse.json({ error: "No file body" }, { status: 400 })
-  }
-
-  // Only allow image formats
-  const allowed = ["jpg", "jpeg", "png", "webp", "gif"]
-  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
-  if (!allowed.includes(ext)) {
-    return NextResponse.json(
-      { error: "Only image files allowed (jpg, png, webp, gif)" },
-      { status: 400 }
-    )
-  }
-
-  const blob = await put(filename, request.body, {
-    access: "public",
-    contentType: request.headers.get("content-type") ?? "image/jpeg",
-  })
-
-  return NextResponse.json(blob)
 }

@@ -7,19 +7,17 @@ export interface UploadResult {
 
 /**
  * Upload an image to Vercel Blob via /api/upload.
+ * Uses FormData so the server receives the full File with content-length.
  * Returns the CDN URL to be saved as cover_image.
  */
 export async function uploadImage(file: File): Promise<UploadResult> {
-  const response = await fetch(
-    `/api/upload?filename=${encodeURIComponent(file.name)}`,
-    {
-      method: "POST",
-      body: file,
-      headers: {
-        "content-type": file.type,
-      },
-    }
-  )
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    body: formData,
+  })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Upload failed" }))
