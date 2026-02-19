@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, Edit, Trash2, Eye, EyeOff, Newspaper, Loader2, ImageIcon } from "lucide-react"
+import { ArrowLeft, Plus, Edit, Trash2, Eye, EyeOff, Newspaper, Loader2, ImageIcon, X } from "lucide-react"
+import { uploadImage } from "@/lib/services/upload-service"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -110,6 +111,12 @@ export default function AdminNewsPage() {
   const [form, setForm] = useState<NewsForm>(emptyForm)
   const [saving, setSaving] = useState(false)
 
+  // Image upload state
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string>("")
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -157,6 +164,8 @@ export default function AdminNewsPage() {
   const handleCreate = () => {
     setEditingId(null)
     setForm(emptyForm)
+    setCoverFile(null)
+    setCoverPreview("")
     setModalOpen(true)
   }
 
@@ -169,6 +178,8 @@ export default function AdminNewsPage() {
       cover_image: post.cover_image || "",
       published: post.published,
     })
+    setCoverFile(null)
+    setCoverPreview(post.cover_image ?? "")
     setModalOpen(true)
   }
 
@@ -177,6 +188,8 @@ export default function AdminNewsPage() {
       setModalOpen(false)
       setForm(emptyForm)
       setEditingId(null)
+      setCoverFile(null)
+      setCoverPreview("")
     }
   }
 
@@ -192,12 +205,29 @@ export default function AdminNewsPage() {
     setSaving(true)
 
     try {
+      let coverImageUrl = form.cover_image
+
+      // Upload new file to Vercel Blob if selected
+      if (coverFile) {
+        setIsUploading(true)
+        try {
+          const result = await uploadImage(coverFile)
+          coverImageUrl = result.url
+        } catch {
+          showToast("error", "Image upload failed. Try again.")
+          setIsUploading(false)
+          setSaving(false)
+          return
+        }
+        setIsUploading(false)
+      }
+
       if (editingId) {
         const payload: UpdateNewsPayload = {
           title: form.title,
           summary: form.summary,
           content: form.content,
-          cover_image: form.cover_image || undefined,
+          cover_image: coverImageUrl || undefined,
           published: form.published,
         }
         await adminUpdateNews(token, editingId, payload)
@@ -207,7 +237,7 @@ export default function AdminNewsPage() {
           title: form.title,
           summary: form.summary,
           content: form.content,
-          cover_image: form.cover_image || undefined,
+          cover_image: coverImageUrl || undefined,
           published: form.published,
         }
         await adminCreateNews(token, payload)
@@ -217,6 +247,8 @@ export default function AdminNewsPage() {
       setModalOpen(false)
       setForm(emptyForm)
       setEditingId(null)
+      setCoverFile(null)
+      setCoverPreview("")
       await fetchPosts()
     } catch (err) {
       const apiErr = err as ApiError
@@ -253,21 +285,6 @@ export default function AdminNewsPage() {
       showToast("error", apiErr.message || "Failed to delete post")
     } finally {
       setDeleting(false)
-    }
-  }
-
-  // ==========================================
-  // COVER IMAGE PREVIEW
-  // ==========================================
-
-  const isValidUrl = (url: string): boolean => {
-    if (!url) return false
-    try {
-      if (url.startsWith("/")) return true
-      new URL(url)
-      return true
-    } catch {
-      return false
     }
   }
 
@@ -488,34 +505,67 @@ export default function AdminNewsPage() {
               )}
             </div>
 
-            {/* Cover Image URL */}
+            {/* Cover Image Upload */}
             <div className="space-y-2">
-              <Label>Cover Image URL</Label>
-              <Input
-                value={form.cover_image}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, cover_image: e.target.value }))
-                }
-                placeholder="/image.jpg or https://..."
-              />
-              {form.cover_image && isValidUrl(form.cover_image) && (
-                <div className="mt-2 aspect-video max-w-xs rounded-lg overflow-hidden bg-secondary">
+              <Label>Cover Image</Label>
+
+              {/* Preview area */}
+              {coverPreview && (
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-secondary border">
                   <img
-                    src={form.cover_image}
+                    src={coverPreview}
                     alt="Cover preview"
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      ;(e.target as HTMLImageElement).style.display = "none"
-                    }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCoverFile(null)
+                      setCoverPreview("")
+                      setForm((f) => ({ ...f, cover_image: "" }))
+                      if (fileInputRef.current) fileInputRef.current.value = ""
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-full bg-black/60 hover:bg-black/80 text-white"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               )}
-              {form.cover_image && !isValidUrl(form.cover_image) && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                  <ImageIcon className="h-3 w-3" />
-                  <span>Enter a valid URL to preview the image</span>
+
+              {/* Upload dropzone */}
+              {!coverPreview && (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full aspect-video rounded-lg border-2 border-dashed border-border hover:border-primary/50 
+                             flex flex-col items-center justify-center gap-2 cursor-pointer
+                             bg-secondary/30 hover:bg-secondary/60 transition-colors"
+                >
+                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Click to upload cover image</p>
+                  <p className="text-xs text-muted-foreground">JPG, PNG, WebP -- max 4MB</p>
                 </div>
               )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+
+                  if (file.size > 4 * 1024 * 1024) {
+                    showToast("error", "Image must be under 4MB")
+                    return
+                  }
+
+                  setCoverFile(file)
+                  const localUrl = URL.createObjectURL(file)
+                  setCoverPreview(localUrl)
+                }}
+              />
             </div>
 
             {/* Published toggle */}
@@ -541,9 +591,14 @@ export default function AdminNewsPage() {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={saving || !isFormValid(form)}
+              disabled={saving || isUploading || !isFormValid(form)}
             >
-              {saving ? (
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading image...
+                </>
+              ) : saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Saving...
