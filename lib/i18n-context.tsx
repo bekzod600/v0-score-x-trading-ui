@@ -449,10 +449,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// Fallback used when context is not yet available (e.g. during Suspense hydration)
+const fallbackI18n: I18nContextType = {
+  language: "uz",
+  setLanguage: () => {},
+  t: (key: string) => {
+    return translations.en[key] || key
+  },
+  languages: languageNames,
+}
+
 export function useI18n() {
   const context = useContext(I18nContext)
-  if (!context) {
-    throw new Error("useI18n must be used within an I18nProvider")
-  }
-  return context
+  return context ?? fallbackI18n
 }
