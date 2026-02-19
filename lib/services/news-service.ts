@@ -53,6 +53,7 @@ export async function listNews(params?: {
   return apiRequest<NewsListResponse>({
     method: "GET",
     path: `/news?page=${page}&limit=${limit}`,
+    timeoutMs: 10000,
   })
 }
 
@@ -60,6 +61,7 @@ export async function getNews(id: string): Promise<NewsPost> {
   return apiRequest<NewsPost>({
     method: "GET",
     path: `/news/${id}`,
+    timeoutMs: 10000,
   })
 }
 
