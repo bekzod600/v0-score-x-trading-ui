@@ -125,14 +125,9 @@ export default function TrainingCentersPage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold md:text-3xl">Training Centers</h1>
-          <p className="text-sm text-muted-foreground mt-1">Learn trading from verified experts</p>
-        </div>
-        <Link href="/training-centers/register">
-          <Button className="w-full sm:w-auto">Register Your Center</Button>
-        </Link>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold md:text-3xl">Training Centers</h1>
+        <p className="text-sm text-muted-foreground mt-1">Learn trading from verified experts</p>
       </div>
 
       {/* Search and Filters */}
@@ -271,12 +266,7 @@ export default function TrainingCentersPage() {
           description={
             search || cityFilter !== "all"
               ? "Try adjusting your search or filters."
-              : "Be the first to register a training center!"
-          }
-          action={
-            !search && cityFilter === "all"
-              ? { label: "Register Your Center", href: "/training-centers/register" }
-              : undefined
+              : "No training centers available yet."
           }
         />
       )}

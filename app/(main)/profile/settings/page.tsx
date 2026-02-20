@@ -16,6 +16,10 @@ import {
   LogOut,
   ExternalLink,
   Loader2,
+  Plus,
+  Check,
+  X,
+  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -24,6 +28,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Dialog,
   DialogContent,
@@ -42,8 +47,13 @@ import { LanguageSwitcherMobile } from "@/components/layout/language-switcher"
 import {
   getMyCenter,
   updateMyCenter,
+  registerCenter,
+  getMyEnrollmentRequests,
+  approveEnrollment,
+  rejectEnrollment,
   type TrainingCenter,
   type UpdateCenterPayload,
+  type EnrollmentRequest,
 } from "@/lib/services/training-centers-service"
 
 export default function ProfileSettingsPage() {
@@ -66,6 +76,24 @@ export default function ProfileSettingsPage() {
     logo_url: "",
   })
 
+  // Create center state
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    description: "",
+    city: "",
+    phone: "",
+    address: "",
+    telegram: "",
+    website: "",
+  })
+
+  // Enrollment requests state
+  const [enrollRequests, setEnrollRequests] = useState<EnrollmentRequest[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+
   // Load user's center
   useEffect(() => {
     if (isHydrating) return
@@ -77,6 +105,16 @@ export default function ProfileSettingsPage() {
       .then((c) => setMyCenter(c))
       .catch(() => setMyCenter(null))
   }, [token, isHydrating])
+
+  // Load enrollment requests for approved centers
+  useEffect(() => {
+    if (!myCenter || myCenter.status !== "approved" || !token) return
+    setRequestsLoading(true)
+    getMyEnrollmentRequests(token)
+      .then(setEnrollRequests)
+      .catch(() => {})
+      .finally(() => setRequestsLoading(false))
+  }, [myCenter, token])
 
   // During SSR prerendering, profile may be null
   if (!profile) return null
@@ -115,6 +153,66 @@ export default function ProfileSettingsPage() {
       setEditSubmitting(false)
     }
   }
+
+  const handleCreateCenter = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!token) return
+    if (!createForm.name || !createForm.description || !createForm.city || !createForm.phone) {
+      showToast("error", "Please fill in required fields")
+      return
+    }
+    setCreateSubmitting(true)
+    try {
+      const created = await registerCenter(token, createForm)
+      setMyCenter(created)
+      setCreateModalOpen(false)
+      setCreateForm({ name: "", description: "", city: "", phone: "", address: "", telegram: "", website: "" })
+      showToast("success", "Training center submitted for approval!")
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Failed to create center"
+      showToast("error", msg)
+    } finally {
+      setCreateSubmitting(false)
+    }
+  }
+
+  const handleApproveRequest = async (requestId: string) => {
+    if (!token) return
+    setActionLoadingId(requestId)
+    try {
+      await approveEnrollment(token, requestId)
+      setEnrollRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: "approved" as const } : r)),
+      )
+      showToast("success", "Student approved!")
+    } catch {
+      showToast("error", "Failed to approve")
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!token) return
+    setActionLoadingId(requestId)
+    try {
+      await rejectEnrollment(token, requestId)
+      setEnrollRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: "rejected" as const } : r)),
+      )
+      showToast("success", "Request rejected")
+    } catch {
+      showToast("error", "Failed to reject")
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const pendingRequests = enrollRequests.filter((r) => r.status === "pending")
+  const processedRequests = enrollRequests.filter((r) => r.status !== "pending")
 
   // Redirect guests to login (skip in WebApp mode or while hydrating)
   if (!isHydrating && !isLoggedIn && !isWebApp) {
@@ -244,16 +342,115 @@ export default function ProfileSettingsPage() {
                   </a>
                 </div>
               )}
+
+              {/* Enrollment Requests (only for approved centers) */}
+              {myCenter.status === "approved" && (
+                <div className="mt-4 border-t pt-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Enrollment Requests
+                    {pendingRequests.length > 0 && (
+                      <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">
+                        {pendingRequests.length}
+                      </Badge>
+                    )}
+                  </h4>
+
+                  {requestsLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : enrollRequests.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No enrollment requests yet.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {/* Pending requests first */}
+                      {pendingRequests.map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg border bg-secondary/30 px-3 py-2 gap-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-7 w-7 flex-shrink-0">
+                              <AvatarFallback className="text-xs">
+                                {req.username.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">@{req.username}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(req.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-7 px-2 text-xs gap-1"
+                              disabled={actionLoadingId === req.id}
+                              onClick={() => handleApproveRequest(req.id)}
+                            >
+                              {actionLoadingId === req.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs gap-1"
+                              disabled={actionLoadingId === req.id}
+                              onClick={() => handleRejectRequest(req.id)}
+                            >
+                              <X className="h-3 w-3" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Processed requests (last 5) */}
+                      {processedRequests.slice(0, 5).map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg px-3 py-2 gap-2 opacity-50"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-7 w-7 flex-shrink-0">
+                              <AvatarFallback className="text-xs">
+                                {req.username.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <p className="text-sm truncate">@{req.username}</p>
+                          </div>
+                          <Badge
+                            variant={req.status === "approved" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {req.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* No center */}
           {myCenter === null && (
-            <div className="text-center py-4">
-              <p className="text-muted-foreground mb-4">You haven&apos;t registered a training center yet.</p>
-              <Link href="/training-centers/register">
-                <Button>{t("training.register")}</Button>
-              </Link>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                You haven&apos;t registered a training center yet.
+              </p>
+              <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Training Center
+              </Button>
             </div>
           )}
         </CardContent>
@@ -314,6 +511,116 @@ export default function ProfileSettingsPage() {
         <LogOut className="mr-2 h-4 w-4" />
         {t("nav.logout")}
       </Button>
+
+      {/* Create Center Modal */}
+      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Register Training Center</DialogTitle>
+            <DialogDescription>
+              Submit your center for admin approval. You can only register one center.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateCenter} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="c-name">
+                Center Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="c-name"
+                value={createForm.name}
+                onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Your trading center name"
+                required
+                disabled={createSubmitting}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-city">
+                  City <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="c-city"
+                  value={createForm.city}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, city: e.target.value }))}
+                  placeholder="Tashkent"
+                  required
+                  disabled={createSubmitting}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-phone">
+                  Phone <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="c-phone"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="+998 90 123 45 67"
+                  required
+                  disabled={createSubmitting}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-desc">
+                Description <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="c-desc"
+                value={createForm.description}
+                onChange={(e) => setCreateForm((p) => ({ ...p, description: e.target.value }))}
+                rows={3}
+                placeholder="Describe your training center..."
+                required
+                disabled={createSubmitting}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-address">Address</Label>
+              <Input
+                id="c-address"
+                value={createForm.address}
+                onChange={(e) => setCreateForm((p) => ({ ...p, address: e.target.value }))}
+                placeholder="Full address (optional)"
+                disabled={createSubmitting}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-tg">Telegram</Label>
+                <Input
+                  id="c-tg"
+                  value={createForm.telegram}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, telegram: e.target.value }))}
+                  placeholder="@username"
+                  disabled={createSubmitting}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-web">Website</Label>
+                <Input
+                  id="c-web"
+                  value={createForm.website}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, website: e.target.value }))}
+                  placeholder="https://..."
+                  disabled={createSubmitting}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)} disabled={createSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createSubmitting}>
+                {createSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Submit for Approval
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Center Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>

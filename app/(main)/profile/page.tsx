@@ -31,20 +31,15 @@ function ProfileContent() {
   const { profile, favorites, isLoggedIn, isHydrating, isWebApp, token } = useUser()
   const { balance } = useWallet()
 
-  // During SSR prerendering, profile may be null
-  if (!profile) return null
-
-  // State for user signals from API
+  // ALL hooks must be called before any conditional returns
   const [userSignals, setUserSignals] = useState<ApiSignal[]>([])
   const [isLoadingSignals, setIsLoadingSignals] = useState(true)
   const [signalsError, setSignalsError] = useState<string | null>(null)
 
-  // State for favorite signals from API
   const [favoriteSignals, setFavoriteSignals] = useState<ApiSignal[]>([])
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
   const [favoritesError, setFavoritesError] = useState<string | null>(null)
 
-  // Full profile stats from API
   const [profileStats, setProfileStats] = useState<ApiTrader | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
@@ -57,7 +52,7 @@ function ProfileContent() {
   // Fetch user's signals from API
   useEffect(() => {
     async function fetchUserSignals() {
-      if (!token) {
+      if (!token || !profile) {
         setIsLoadingSignals(false)
         return
       }
@@ -76,12 +71,12 @@ function ProfileContent() {
     }
 
     fetchUserSignals()
-  }, [token])
+  }, [token, profile])
 
   // Fetch full profile stats from traders API
   useEffect(() => {
     async function fetchProfileStats() {
-      if (!token || !profile.username) {
+      if (!token || !profile?.username) {
         setIsLoadingProfile(false)
         return
       }
@@ -97,13 +92,12 @@ function ProfileContent() {
       }
     }
 
-    if (profile.username) {
+    if (profile?.username) {
       fetchProfileStats()
     } else {
-      // No username yet, stop loading
       setIsLoadingProfile(false)
     }
-  }, [token, profile.username])
+  }, [token, profile?.username])
 
   // Fetch favorites when tab is "favorites"
   useEffect(() => {
@@ -114,10 +108,8 @@ function ProfileContent() {
       setFavoritesError(null)
       try {
         const response = await getMyFavorites(token)
-        // Backend returns { signals: [...], total: number }
         setFavoriteSignals(response?.signals || [])
       } catch {
-        // Silently fail - show empty state instead of error
         setFavoriteSignals([])
       } finally {
         setIsLoadingFavorites(false)
@@ -127,7 +119,8 @@ function ProfileContent() {
     fetchFavorites()
   }, [tab, token])
 
-  if (!isLoggedIn) {
+  // Conditional returns AFTER all hooks
+  if (!profile || !isLoggedIn) {
     return null
   }
 
