@@ -16,21 +16,22 @@ import {
   Building,
   Calendar,
   Loader2,
+  Clock,
+  GraduationCap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useUser } from "@/lib/user-context"
 import { useToast } from "@/lib/toast-context"
 import {
   getCenter,
-  enrollCenter,
-  unenrollCenter,
+  requestEnroll,
   rateCenter,
   type TrainingCenter,
 } from "@/lib/services/training-centers-service"
@@ -63,20 +64,24 @@ export default function TrainingCenterDetailPage() {
   const params = useParams()
   const id = params.id as string
   const router = useRouter()
-  const { token, isLoggedIn } = useUser()
+  const { token, profile, isLoggedIn } = useUser()
   const { showToast } = useToast()
 
   const [center, setCenter] = useState<TrainingCenter | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [isEnrolled, setIsEnrolled] = useState(false)
+  const [isRequestPending, setIsRequestPending] = useState(false)
   const [userRating, setUserRating] = useState<number>(0)
   const [hoverRating, setHoverRating] = useState(0)
-  const [enrolling, setEnrolling] = useState(false)
+  const [enrollLoading, setEnrollLoading] = useState(false)
+  const [requestSentModal, setRequestSentModal] = useState(false)
 
   const [studentsModalOpen, setStudentsModalOpen] = useState(false)
   const [contactModalOpen, setContactModalOpen] = useState(false)
   const [studentSearch, setStudentSearch] = useState("")
+
+  const isOwner = profile?.id === center?.owner?.id
 
   useEffect(() => {
     const load = async () => {
@@ -86,6 +91,7 @@ export default function TrainingCenterDetailPage() {
         const data = await getCenter(id, token)
         setCenter(data)
         setIsEnrolled(data.is_enrolled ?? false)
+        setIsRequestPending(data.is_request_pending ?? false)
         setUserRating(data.user_rating ?? 0)
       } catch {
         setNotFound(true)
@@ -96,21 +102,24 @@ export default function TrainingCenterDetailPage() {
     load()
   }, [id, token])
 
-  const handleEnrollToggle = async () => {
+  const handleStudiedHere = async () => {
     if (!isLoggedIn || !token) {
       router.push("/login")
       return
     }
-    setEnrolling(true)
+    setEnrollLoading(true)
     try {
-      const res = isEnrolled ? await unenrollCenter(token, id) : await enrollCenter(token, id)
-      setIsEnrolled(res.enrolled)
-      setCenter((prev) => (prev ? { ...prev, students_count: res.students_count } : prev))
-      showToast("success", res.enrolled ? "Added to your studied centers!" : "Removed from studied centers")
-    } catch {
-      showToast("error", "Failed. Try again.")
+      await requestEnroll(token, id)
+      setIsRequestPending(true)
+      setRequestSentModal(true)
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Failed to send request"
+      showToast("error", msg)
     } finally {
-      setEnrolling(false)
+      setEnrollLoading(false)
     }
   }
 
@@ -233,22 +242,36 @@ export default function TrainingCenterDetailPage() {
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <Button
-          variant={isEnrolled ? "secondary" : "default"}
-          onClick={handleEnrollToggle}
-          disabled={enrolling}
-        >
-          {enrolling ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle className="mr-2 h-4 w-4" />
-          )}
-          {!isLoggedIn
-            ? "Login to mark as studied"
-            : isEnrolled
-              ? "You Studied Here"
-              : "I Studied Here"}
-        </Button>
+        {/* Studied Here - hidden for owner */}
+        {!isOwner && (
+          <>
+            {isEnrolled ? (
+              <Button disabled variant="outline" className="gap-2 cursor-default">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                Studied Here
+              </Button>
+            ) : isRequestPending ? (
+              <Button disabled variant="outline" className="gap-2 cursor-default text-yellow-600 border-yellow-300 dark:text-yellow-400 dark:border-yellow-600">
+                <Clock className="h-4 w-4" />
+                Request Sent - Pending Approval
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                onClick={handleStudiedHere}
+                disabled={enrollLoading || !isLoggedIn}
+                className="gap-2"
+              >
+                {enrollLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <GraduationCap className="h-4 w-4" />
+                )}
+                {isLoggedIn ? "I Studied Here" : "Login to mark as studied"}
+              </Button>
+            )}
+          </>
+        )}
         <Dialog open={contactModalOpen} onOpenChange={setContactModalOpen}>
           <DialogTrigger asChild>
             <Button variant="outline">
@@ -446,6 +469,26 @@ export default function TrainingCenterDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Request Sent Success Modal */}
+      <Dialog open={requestSentModal} onOpenChange={setRequestSentModal}>
+        <DialogContent className="sm:max-w-sm text-center">
+          <DialogHeader>
+            <div className="flex justify-center mb-2">
+              <div className="rounded-full bg-green-100 p-3 dark:bg-green-900/30">
+                <CheckCircle className="h-8 w-8 text-green-600" />
+              </div>
+            </div>
+            <DialogTitle>Request Sent!</DialogTitle>
+            <DialogDescription className="text-center">
+              Your request has been submitted. The training center owner will review it, and you will be notified once approved.
+            </DialogDescription>
+          </DialogHeader>
+          <Button onClick={() => setRequestSentModal(false)} className="w-full mt-2">
+            Got it
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
