@@ -141,6 +141,19 @@ export async function updateMyCenter(token: string, payload: UpdateCenterPayload
 }
 
 /**
+ * DELETE /training-centers/my
+ * O'z markazini o'chirish
+ */
+export async function deleteMyCenter(token: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>({
+    method: "DELETE",
+    path: "/training-centers/my",
+    token,
+    timeoutMs: 10000,
+  })
+}
+
+/**
  * POST /training-centers/:id/enroll
  * "Studied here" bosilganda so'rov yuboriladi.
  * Natija: { status: 'pending', message: string }

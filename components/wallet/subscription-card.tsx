@@ -28,7 +28,23 @@ const premiumFeatures = [
 export function SubscriptionCard() {
   const router = useRouter()
   const { balance, refreshBalance } = useWallet()
-  const { token, subscription, refreshSubscription, isLoggedIn } = useUser()
+  const user = useUser()
+  const token = user.token
+  const isLoggedIn = user.isLoggedIn
+  const refreshSubscription = (user as Record<string, unknown>).refreshSubscription as (() => Promise<void>) | undefined
+  const subscription = ((user as Record<string, unknown>).subscription ?? {
+    isActive: false,
+    plan: "free",
+    daysRemaining: null,
+    expiresAt: null,
+    autoRenew: false,
+  }) as {
+    isActive: boolean
+    plan: string
+    daysRemaining: number | null
+    expiresAt: string | null
+    autoRenew: boolean
+  }
   const { showToast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [isToggling, setIsToggling] = useState(false)
@@ -52,7 +68,7 @@ export function SubscriptionCard() {
     try {
       const result = await purchasePremium(token)
       showToast(result.message || "Premium subscription activated!", "success")
-      await refreshSubscription()
+      if (refreshSubscription) await refreshSubscription()
       await refreshBalance()
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Purchase failed", "error")
@@ -67,7 +83,7 @@ export function SubscriptionCard() {
     setIsToggling(true)
     try {
       await setAutoRenewAPI(token, enabled)
-      await refreshSubscription()
+      if (refreshSubscription) await refreshSubscription()
       showToast(enabled ? "Auto-renew enabled" : "Auto-renew disabled", "success")
     } catch {
       showToast("Failed to update setting", "error")

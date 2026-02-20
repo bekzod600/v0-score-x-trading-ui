@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/lib/user-context"
+import { useToast } from "@/lib/toast-context"
+import { rateTrader as rateTraderAPI, getMyTraderRating } from "@/lib/services/ratings-service"
 
 interface StarRatingProps {
   traderId: string
@@ -15,11 +17,20 @@ interface StarRatingProps {
 }
 
 export function StarRating({ traderId, username, avgStars, totalCount, size = "md", showRateButton = false }: StarRatingProps) {
-  const { getUserRating, rateTrader, ratingLoading, isLoggedIn } = useUser()
+  const { isLoggedIn, token } = useUser()
+  const { showToast } = useToast()
   const [hoverRating, setHoverRating] = useState(0)
   const [isRating, setIsRating] = useState(false)
-  const userRating = getUserRating(traderId)
-  const isLoading = ratingLoading === traderId
+  const [userRating, setUserRating] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [localAvg, setLocalAvg] = useState(avgStars)
+
+  useEffect(() => {
+    if (!isLoggedIn || !token || !showRateButton) return
+    getMyTraderRating(username, token)
+      .then((res) => { if (res.stars) setUserRating(res.stars) })
+      .catch(() => {})
+  }, [isLoggedIn, token, username, showRateButton])
 
   const sizeClasses = {
     sm: "h-3 w-3",
@@ -28,12 +39,18 @@ export function StarRating({ traderId, username, avgStars, totalCount, size = "m
   }
 
   const handleRate = async (stars: number) => {
-    if (!isLoggedIn) {
-      // Would redirect to login in real app
-      return
+    if (!isLoggedIn || !token) return
+    setIsLoading(true)
+    try {
+      const res = await rateTraderAPI(username, stars, token)
+      setUserRating(stars)
+      setLocalAvg(res.newAvgStars)
+      setIsRating(false)
+    } catch {
+      showToast("error", "Failed to rate. Try again.")
+    } finally {
+      setIsLoading(false)
     }
-    await rateTrader(traderId, username, stars)
-    setIsRating(false)
   }
 
   if (isRating) {
@@ -73,12 +90,12 @@ export function StarRating({ traderId, username, avgStars, totalCount, size = "m
               key={star}
               className={cn(
                 sizeClasses[size],
-                star <= Math.round(avgStars) ? "fill-warning text-warning" : "text-muted-foreground/30",
+                star <= Math.round(localAvg) ? "fill-warning text-warning" : "text-muted-foreground/30",
               )}
             />
           ))}
         </div>
-        <span className="text-sm font-medium">{avgStars.toFixed(1)}</span>
+        <span className="text-sm font-medium">{localAvg.toFixed(1)}</span>
         <span className="text-xs text-muted-foreground">({totalCount})</span>
       </div>
       {showRateButton && (

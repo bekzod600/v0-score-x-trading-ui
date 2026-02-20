@@ -20,6 +20,7 @@ import {
   Check,
   X,
   Users,
+  Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -47,6 +48,7 @@ import { LanguageSwitcherMobile } from "@/components/layout/language-switcher"
 import {
   getMyCenter,
   updateMyCenter,
+  deleteMyCenter,
   registerCenter,
   getMyEnrollmentRequests,
   approveEnrollment,
@@ -88,6 +90,10 @@ export default function ProfileSettingsPage() {
     telegram: "",
     website: "",
   })
+
+  // Delete center state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
   // Enrollment requests state
   const [enrollRequests, setEnrollRequests] = useState<EnrollmentRequest[]>([])
@@ -151,6 +157,21 @@ export default function ProfileSettingsPage() {
       showToast("error", "Update failed. Try again.")
     } finally {
       setEditSubmitting(false)
+    }
+  }
+
+  const handleDeleteCenter = async () => {
+    if (!token) return
+    setDeleteSubmitting(true)
+    try {
+      await deleteMyCenter(token)
+      setMyCenter(null)
+      setDeleteModalOpen(false)
+      showToast("success", "Training center deleted successfully")
+    } catch {
+      showToast("error", "Failed to delete. Try again.")
+    } finally {
+      setDeleteSubmitting(false)
     }
   }
 
@@ -295,7 +316,7 @@ export default function ProfileSettingsPage() {
 
               {/* Approved status - show view & edit actions */}
               {myCenter.status === "approved" && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {myCenter.is_listed && (
                     <Link href={`/training-centers/${myCenter.id}`} className="flex-1">
                       <Button variant="outline" className="w-full bg-transparent">
@@ -306,11 +327,20 @@ export default function ProfileSettingsPage() {
                   )}
                   <Button
                     variant="outline"
-                    className={myCenter.is_listed ? "flex-1 bg-transparent" : "w-full bg-transparent"}
+                    className="flex-1 bg-transparent"
                     onClick={handleOpenEditModal}
                   >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Center
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={() => setDeleteModalOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
                   </Button>
                 </div>
               )}
@@ -703,6 +733,37 @@ export default function ProfileSettingsPage() {
               ) : (
                 t("action.save")
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Center Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Training Center</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{myCenter?.name}</strong>?
+              This action cannot be undone. All enrollments and ratings will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleteSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteCenter}
+              disabled={deleteSubmitting}
+              className="gap-2"
+            >
+              {deleteSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Delete Permanently
             </Button>
           </DialogFooter>
         </DialogContent>
