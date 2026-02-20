@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Trophy, TrendingUp, Users, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,8 +12,8 @@ import { SubscribeButton } from "@/components/profile/subscribe-button"
 import { useSearchParams } from "next/navigation"
 import { getTraderByUsername, getTraderSignals, type ApiTrader, type ApiSignal } from "@/lib/services/signals-service"
 
-export default function PublicProfilePage({ params }: { params: Promise<{ username: string }> }) {
-  const { username } = use(params)
+export default function PublicProfilePage({ params }: { params: { username: string } }) {
+  const { username } = params
   const searchParams = useSearchParams()
   const tab = searchParams.get("tab") || "live"
 
