@@ -1,66 +1,127 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
-import { Search, MapPin, Star, Users, SlidersHorizontal, ArrowUpDown } from "lucide-react"
+import { Search, MapPin, Star, Users, SlidersHorizontal, ArrowUpDown, Loader2, GraduationCap } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/ui/empty-state"
-import { useAdmin } from "@/lib/admin-context"
-import { GraduationCap } from "lucide-react"
+import { useUser } from "@/lib/user-context"
+import { listCenters, type TrainingCenter } from "@/lib/services/training-centers-service"
 
 type SortOption = "rating" | "students" | "newest"
 
+function CenterSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex gap-4">
+          <Skeleton className="h-16 w-16 rounded-lg shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-24" />
+            <div className="flex gap-4 pt-1">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function TrainingCentersPage() {
-  const { trainingCenters } = useAdmin()
+  const { token } = useUser()
+  const [centers, setCenters] = useState<TrainingCenter[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
-  const [cityFilter, setCityFilter] = useState<string>("all")
+  const [cityFilter, setCityFilter] = useState("all")
   const [sortBy, setSortBy] = useState<SortOption>("rating")
 
-  // Only show approved centers
-  const approvedCenters = trainingCenters.filter((c) => c.status === "approved")
+  // Debounce search
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
-  // Get unique cities for filter
-  const cities = useMemo(() => {
-    const uniqueCities = new Set(approvedCenters.map((c) => c.city))
-    return Array.from(uniqueCities).sort()
-  }, [approvedCenters])
-
-  // Filter and sort centers
-  const filteredCenters = useMemo(() => {
-    let filtered = approvedCenters
-
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase()
-      filtered = filtered.filter(
-        (c) => c.name.toLowerCase().includes(searchLower) || c.city.toLowerCase().includes(searchLower),
-      )
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 400)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
     }
+  }, [search])
 
-    // City filter
-    if (cityFilter !== "all") {
-      filtered = filtered.filter((c) => c.city === cityFilter)
-    }
+  // Extract unique cities from loaded centers for filter dropdown
+  const [cities, setCities] = useState<string[]>([])
 
-    // Sort
-    switch (sortBy) {
-      case "rating":
-        filtered = [...filtered].sort((a, b) => b.rating - a.rating)
-        break
-      case "students":
-        filtered = [...filtered].sort((a, b) => b.studentsCount - a.studentsCount)
-        break
-      case "newest":
-        filtered = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        break
-    }
+  const loadCenters = useCallback(
+    async (reset = false) => {
+      const currentPage = reset ? 1 : page
+      if (reset) {
+        setPage(1)
+        setCenters([])
+      }
 
-    return filtered
-  }, [approvedCenters, search, cityFilter, sortBy])
+      reset ? setLoading(true) : setLoadingMore(true)
+      setError(null)
+
+      try {
+        const res = await listCenters({
+          page: currentPage,
+          limit: 12,
+          search: debouncedSearch || undefined,
+          city: cityFilter !== "all" ? cityFilter : undefined,
+          sort: sortBy,
+          token,
+        })
+
+        if (reset) {
+          setCenters(res.centers)
+        } else {
+          setCenters((prev) => [...prev, ...res.centers])
+        }
+        setTotal(res.total)
+        if (!reset) setPage((p) => p + 1)
+
+        // Collect unique cities
+        if (reset) {
+          const uniqueCities = new Set<string>()
+          res.centers.forEach((c) => {
+            if (c.city) uniqueCities.add(c.city)
+          })
+          setCities((prev) => {
+            const merged = new Set([...prev, ...uniqueCities])
+            return Array.from(merged).sort()
+          })
+        }
+      } catch {
+        setError("Failed to load training centers")
+      } finally {
+        setLoading(false)
+        setLoadingMore(false)
+      }
+    },
+    [page, debouncedSearch, cityFilter, sortBy, token],
+  )
+
+  // Load on filter changes
+  useEffect(() => {
+    loadCenters(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, cityFilter, sortBy])
+
+  const hasMore = centers.length < total
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-6">
@@ -114,50 +175,96 @@ export default function TrainingCentersPage() {
         </div>
       </div>
 
-      {/* Centers List */}
-      {filteredCenters.length > 0 ? (
+      {/* Loading Skeleton */}
+      {loading && (
         <div className="space-y-4">
-          {filteredCenters.map((center) => (
-            <Card key={center.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex gap-4">
-                  <Avatar className="h-16 w-16 rounded-lg">
-                    <AvatarImage src={center.logo || "/placeholder.svg?height=64&width=64"} alt={center.name} />
-                    <AvatarFallback className="rounded-lg text-lg">{center.name.substring(0, 2)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-semibold text-base truncate">{center.name}</h3>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-0.5">
-                          <MapPin className="h-3.5 w-3.5" />
-                          <span>{center.city}</span>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CenterSkeleton key={i} />
+          ))}
+        </div>
+      )}
+
+      {/* Error State */}
+      {!loading && error && (
+        <EmptyState
+          icon={GraduationCap}
+          title="Failed to load centers"
+          description={error}
+          action={{ label: "Try Again", onClick: () => loadCenters(true) }}
+        />
+      )}
+
+      {/* Centers List */}
+      {!loading && !error && centers.length > 0 && (
+        <div className="space-y-4">
+          {centers.map((center) => (
+            <Link key={center.id} href={`/training-centers/${center.id}`} className="block">
+              <Card className="overflow-hidden hover:border-primary/30 transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex gap-4">
+                    <Avatar className="h-16 w-16 rounded-lg shrink-0">
+                      <AvatarImage src={center.logo_url || undefined} alt={center.name} />
+                      <AvatarFallback className="rounded-lg text-lg">{center.name.substring(0, 2)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-base truncate">{center.name}</h3>
+                          {center.city && (
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground mt-0.5">
+                              <MapPin className="h-3.5 w-3.5 shrink-0" />
+                              <span className="truncate">{center.city}</span>
+                            </div>
+                          )}
                         </div>
+                        {center.is_enrolled && (
+                          <Badge variant="secondary" className="shrink-0 text-xs">
+                            Studied Here
+                          </Badge>
+                        )}
                       </div>
-                      <Link href={`/training-centers/${center.id}`}>
-                        <Button variant="outline" size="sm">
-                          View
-                        </Button>
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-4 mt-3">
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-primary text-primary" />
-                        <span className="font-medium">{center.rating.toFixed(1)}</span>
-                        <span className="text-sm text-muted-foreground">({center.ratingCount})</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Users className="h-4 w-4" />
-                        <span>{center.studentsCount} students</span>
+                      <div className="flex items-center gap-4 mt-3">
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 fill-primary text-primary" />
+                          <span className="font-medium">{Number(center.rating).toFixed(1)}</span>
+                          <span className="text-sm text-muted-foreground">({center.rating_count})</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Users className="h-4 w-4" />
+                          <span>{center.students_count} students</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
+
+          {/* Load More */}
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <Button
+                variant="outline"
+                onClick={() => loadCenters(false)}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load More"
+                )}
+              </Button>
+            </div>
+          )}
         </div>
-      ) : (
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && centers.length === 0 && (
         <EmptyState
           icon={GraduationCap}
           title="No centers found"
@@ -167,11 +274,9 @@ export default function TrainingCentersPage() {
               : "Be the first to register a training center!"
           }
           action={
-            !search && cityFilter === "all" ? (
-              <Link href="/training-centers/register">
-                <Button>Register Your Center</Button>
-              </Link>
-            ) : undefined
+            !search && cityFilter === "all"
+              ? { label: "Register Your Center", href: "/training-centers/register" }
+              : undefined
           }
         />
       )}
