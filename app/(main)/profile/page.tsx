@@ -73,7 +73,7 @@ function ProfileContent() {
       try {
         setIsLoadingSignals(true)
         setSignalsError(null)
-        const response = await getMySignals(token)
+        const response = await getMySignals(token, { tab: undefined })
         setUserSignals(response.signals || [])
       } catch (err) {
         setSignalsError(err instanceof Error ? err.message : "Failed to load signals")

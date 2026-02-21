@@ -417,8 +417,11 @@ export async function getMySignals(token: string, params?: {
   tab?: "live" | "results"
 }): Promise<SignalsListResponse> {
   const searchParams = new URLSearchParams()
-  if (params?.tab) searchParams.set("tab", params.tab)
-  
+  if (params?.tab) {
+    searchParams.set("tab", params.tab)
+  }
+  // tab yo'q bo'lsa backend barcha signallarni qaytaradi
+
   const query = searchParams.toString()
   const path = `/me/signals${query ? `?${query}` : ""}`
 
