@@ -23,7 +23,11 @@ export function StarRating({ traderId, username, avgStars, totalCount, size = "m
   const [isRating, setIsRating] = useState(false)
   const [userRating, setUserRating] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [localAvg, setLocalAvg] = useState(avgStars)
+  const [localAvg, setLocalAvg] = useState(avgStars ?? 0)
+
+  useEffect(() => {
+    if (avgStars != null) setLocalAvg(avgStars)
+  }, [avgStars])
 
   useEffect(() => {
     if (!isLoggedIn || !token || !showRateButton) return
