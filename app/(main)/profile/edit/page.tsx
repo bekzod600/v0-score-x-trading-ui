@@ -15,14 +15,20 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useUser } from "@/lib/user-context"
 import { uploadImage } from "@/lib/services/upload-service"
+import { apiRequest } from "@/lib/api-client"
 
 interface ProfileData {
   displayName?: string
+  display_name?: string
   bio?: string
   avatar?: string
+  photo_url?: string
   telegramUsername?: string
+  telegram_username?: string
   telegramFirstName?: string
+  telegram_first_name?: string
   telegramLastName?: string
+  [key: string]: unknown
 }
 
 export default function EditProfilePage() {
@@ -50,9 +56,22 @@ export default function EditProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // ─── Fetch profile from API ──────────────────────────
+  // ─── Populate from local context first, then try API ───
   useEffect(() => {
     if (isHydrating) return
+
+    // Always populate form from local profile context immediately (if available)
+    if (profile && !remoteProfile) {
+      const p = profile as Record<string, unknown>
+      setDisplayName(
+        (p.displayName as string) || (p.display_name as string) || profile.telegramFirstName || ""
+      )
+      setBio((p.bio as string) || "")
+      setAvatarPreview(
+        (p.avatar as string) || (p.photo_url as string) || ""
+      )
+    }
+
     if (!token) {
       setIsLoadingProfile(false)
       return
@@ -62,40 +81,29 @@ export default function EditProfilePage() {
 
     async function fetchProfile() {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/me/profile`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "ngrok-skip-browser-warning": "true",
-            },
-          }
-        )
-        if (!res.ok) throw new Error(`Error ${res.status}`)
-        const data = await res.json()
+        const data = await apiRequest<ProfileData | { profile: ProfileData }>({
+          method: "GET",
+          path: "/me/profile",
+          token,
+        })
 
         if (cancelled) return
 
         // API may return { profile: {...} } or flat object
-        const p = data.profile ?? data
+        const raw = data as Record<string, unknown>
+        const p = (raw.profile ?? data) as ProfileData
         setRemoteProfile(p)
 
         // Populate form fields from API response
-        setDisplayName(p.displayName ?? p.display_name ?? p.telegramFirstName ?? "")
-        setBio(p.bio ?? "")
-        setAvatarPreview(p.avatar ?? p.photo_url ?? "")
-      } catch (err) {
+        setDisplayName(
+          p.displayName || p.display_name || p.telegramFirstName || p.telegram_first_name || ""
+        )
+        setBio(p.bio || "")
+        setAvatarPreview(p.avatar || p.photo_url || "")
+      } catch {
+        // Silently use local context data already populated above
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : "Failed to load profile")
-          // Fallback: populate from local profile context
-          if (profile) {
-            setDisplayName(
-              (profile as Record<string, unknown>).displayName as string ??
-              profile.telegramFirstName ?? ""
-            )
-            setBio((profile as Record<string, unknown>).bio as string ?? "")
-            setAvatarPreview((profile as Record<string, unknown>).avatar as string ?? "")
-          }
+          setLoadError(null) // Don't show error banner if local data is available
         }
       } finally {
         if (!cancelled) setIsLoadingProfile(false)
@@ -104,7 +112,7 @@ export default function EditProfilePage() {
 
     fetchProfile()
     return () => { cancelled = true }
-  }, [token, isHydrating, profile])
+  }, [token, isHydrating, profile, remoteProfile])
 
   // ─── Redirect if not logged in ────────────────────────
   if (!isHydrating && !token) {
@@ -212,26 +220,14 @@ export default function EditProfilePage() {
       if (trimmedBio || trimmedBio === "") payload.bio = trimmedBio
       if (uploadedAvatarUrl) payload.avatar = uploadedAvatarUrl
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/me/profile`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            "ngrok-skip-browser-warning": "true",
-          },
-          body: JSON.stringify(payload),
-        }
-      )
+      const data = await apiRequest<Record<string, unknown>>({
+        method: "PATCH",
+        path: "/me/profile",
+        token,
+        body: payload,
+      })
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.message || `Error ${res.status}`)
-      }
-
-      const data = await res.json()
-      const updated = data.profile ?? data
+      const updated = (data.profile ?? data) as Record<string, unknown>
 
       // Update local auth context so the header reflects changes immediately
       if (profile && setProfile) {
@@ -246,8 +242,11 @@ export default function EditProfilePage() {
       setTimeout(() => {
         router.push("/profile")
       }, 1200)
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save changes")
+    } catch (err: unknown) {
+      const msg = (err && typeof err === "object" && "message" in err)
+        ? (err as { message: string }).message
+        : "Failed to save changes"
+      setSaveError(msg)
     } finally {
       setIsSaving(false)
     }
@@ -262,13 +261,6 @@ export default function EditProfilePage() {
         <ArrowLeft className="h-4 w-4" />
         Back to Profile
       </Link>
-
-      {loadError && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          Could not load profile from server. Showing cached data.
-        </div>
-      )}
 
       <Card>
         <CardHeader>
