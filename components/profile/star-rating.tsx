@@ -16,17 +16,18 @@ interface StarRatingProps {
   showRateButton?: boolean
 }
 
-export function StarRating({ traderId, username, avgStars, totalCount, size = "md", showRateButton = false }: StarRatingProps) {
+export function StarRating({ traderId, username, avgStars = 0, totalCount = 0, size = "md", showRateButton = false }: StarRatingProps) {
   const { isLoggedIn, token } = useUser()
   const { showToast } = useToast()
   const [hoverRating, setHoverRating] = useState(0)
   const [isRating, setIsRating] = useState(false)
   const [userRating, setUserRating] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [localAvg, setLocalAvg] = useState(avgStars ?? 0)
+  const [localAvg, setLocalAvg] = useState<number>(Number(avgStars) || 0)
 
   useEffect(() => {
-    if (avgStars != null) setLocalAvg(avgStars)
+    const val = Number(avgStars)
+    if (!isNaN(val)) setLocalAvg(val)
   }, [avgStars])
 
   useEffect(() => {
@@ -48,7 +49,7 @@ export function StarRating({ traderId, username, avgStars, totalCount, size = "m
     try {
       const res = await rateTraderAPI(username, stars, token)
       setUserRating(stars)
-      setLocalAvg(res.newAvgStars)
+      setLocalAvg(Number(res.newAvgStars) || stars)
       setIsRating(false)
     } catch {
       showToast("error", "Failed to rate. Try again.")
@@ -99,8 +100,8 @@ export function StarRating({ traderId, username, avgStars, totalCount, size = "m
             />
           ))}
         </div>
-        <span className="text-sm font-medium">{localAvg.toFixed(1)}</span>
-        <span className="text-xs text-muted-foreground">({totalCount})</span>
+        <span className="text-sm font-medium">{(Number(localAvg) || 0).toFixed(1)}</span>
+        <span className="text-xs text-muted-foreground">({totalCount ?? 0})</span>
       </div>
       {showRateButton && (
         <button onClick={() => setIsRating(true)} className="text-xs text-primary hover:underline text-left">
