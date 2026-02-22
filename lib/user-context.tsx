@@ -36,6 +36,7 @@ interface UserContextType {
   // Actions
   setToken: (token: string | null) => void;
   setProfile: (profile: AuthUser | null) => void;
+  updateProfile: (partial: Partial<AuthUser>) => void;
   hydrateAuth: () => Promise<void>;
   logout: () => void;
   requireAuth: () => boolean;
@@ -88,6 +89,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('scorex_token');
       }
     }
+  }, []);
+
+  // ==========================================
+  // UPDATE PROFILE (partial merge)
+  // ==========================================
+
+  const updateProfile = useCallback((partial: Partial<AuthUser>) => {
+    setProfile((prev) => prev ? { ...prev, ...partial } : prev);
   }, []);
 
   // ==========================================
@@ -288,6 +297,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // Actions
     setToken,
     setProfile,
+    updateProfile,
     hydrateAuth,
     logout,
     requireAuth,
@@ -322,6 +332,7 @@ const fallbackContext: UserContextType = {
   isWebApp: false,
   setToken: noop as (token: string | null) => void,
   setProfile: noop as (profile: AuthUser | null) => void,
+  updateProfile: noop as (partial: Partial<AuthUser>) => void,
   hydrateAuth: noopAsync,
   logout: noop,
   requireAuth: () => false,

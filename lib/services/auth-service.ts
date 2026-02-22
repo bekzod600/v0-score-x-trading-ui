@@ -28,6 +28,9 @@ export interface AuthUser {
   telegramUsername?: string;
   telegramFirstName?: string;
   telegramLastName?: string;
+  displayName?: string;
+  bio?: string;
+  avatar?: string;
   role: string;
   balance?: number;
   createdAt?: string;

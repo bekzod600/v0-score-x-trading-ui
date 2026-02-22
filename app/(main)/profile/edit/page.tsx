@@ -32,7 +32,7 @@ interface RemoteProfile {
 
 export default function EditProfilePage() {
   const router = useRouter()
-  const { token, isHydrating, profile: authProfile, setProfile } = useUser()
+  const { token, isHydrating, updateProfile } = useUser()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Remote data
@@ -184,13 +184,12 @@ export default function EditProfilePage() {
       }
 
       // Context ni yangilash — header va boshqa joylarda avatar/name ko'rinsin
-      if (authProfile) {
-        setProfile({
-          ...authProfile,
-          telegramFirstName: data.profile?.telegramFirstName || authProfile.telegramFirstName,
-          telegramUsername: data.profile?.telegramUsername || authProfile.telegramUsername,
-        })
-      }
+      const updated = data.profile
+      updateProfile({
+        displayName: updated?.displayName || trimmedName || undefined,
+        bio: updated?.bio || trimmedBio || undefined,
+        avatar: updated?.avatar || uploadedAvatarUrl || remoteProfile?.avatar || undefined,
+      })
 
       setSaveSuccess(true)
 
