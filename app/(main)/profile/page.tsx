@@ -73,7 +73,7 @@ function ProfileContent() {
       try {
         setIsLoadingSignals(true)
         setSignalsError(null)
-        const response = await getMySignals(token)
+        const response = await getMySignals(token, { tab: undefined })
         setUserSignals(response.signals || [])
       } catch (err) {
         setSignalsError(err instanceof Error ? err.message : "Failed to load signals")
@@ -159,6 +159,8 @@ function ProfileContent() {
     subscribers: profileStats?.subscribers ?? profile.subscribers ?? 0,
     scoreXPoints: profileStats?.scoreXPoints ?? profile.scoreXPoints ?? 0,
     avgDaysToResult: profileStats?.avgDaysToResult ?? 0,
+    displayName: profileStats?.displayName ?? 'User',
+    telegramUsername: profileStats?.username ?? "username",
   }
   const winRate = displayProfile.totalSignals > 0
     ? Math.round((displayProfile.successfulSignals / displayProfile.totalSignals) * 100)
@@ -182,10 +184,10 @@ function ProfileContent() {
               </Avatar>
               <div className="text-center sm:text-left">
                 <h1 className="text-2xl font-bold text-primary-foreground">
-                  {displayProfile.displayName || displayProfile.username || "User"}
+                  {displayProfile.displayName}
                 </h1>
                 <p className="text-sm text-primary-foreground/80">
-                  @{displayProfile.telegramUsername || (displayProfile.username || "user").toLowerCase()}
+                  @{displayProfile.telegramUsername}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-primary-foreground/80 sm:justify-start">
                   {isLoadingProfile ? (
