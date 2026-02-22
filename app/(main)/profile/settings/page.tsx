@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -13,9 +13,14 @@ import {
   Moon,
   Sun,
   Bell,
-  Shield,
   LogOut,
   ExternalLink,
+  Loader2,
+  Plus,
+  Check,
+  X,
+  Users,
+  Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -23,6 +28,8 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Dialog,
   DialogContent,
@@ -33,63 +40,200 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useAdmin } from "@/lib/admin-context"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useToast } from "@/lib/toast-context"
 import { useTheme } from "next-themes"
 import { LanguageSwitcherMobile } from "@/components/layout/language-switcher"
+import {
+  getMyCenter,
+  updateMyCenter,
+  deleteMyCenter,
+  registerCenter,
+  getMyEnrollmentRequests,
+  approveEnrollment,
+  rejectEnrollment,
+  type TrainingCenter,
+  type UpdateCenterPayload,
+  type EnrollmentRequest,
+} from "@/lib/services/training-centers-service"
 
 export default function ProfileSettingsPage() {
   const router = useRouter()
-  const { getUserCenter, updateCenter, setRole, currentUserRole, isAdmin } = useAdmin()
-  const { profile, logout, isLoggedIn, isHydrating, isWebApp } = useUser()
+  const { profile, logout, isLoggedIn, isHydrating, isWebApp, token } = useUser()
   const { theme, setTheme } = useTheme()
   const { t } = useI18n()
   const { showToast } = useToast()
 
+  // Training center state
+  const [myCenter, setMyCenter] = useState<TrainingCenter | null | undefined>(undefined) // undefined = loading
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editForm, setEditForm] = useState({
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editForm, setEditForm] = useState<UpdateCenterPayload>({
     description: "",
     phone: "",
     telegram: "",
     website: "",
     address: "",
-    logo: "",
+    logo_url: "",
   })
+
+  // Create center state
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    description: "",
+    city: "",
+    phone: "",
+    address: "",
+    telegram: "",
+    website: "",
+  })
+
+  // Delete center state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+
+  // Enrollment requests state
+  const [enrollRequests, setEnrollRequests] = useState<EnrollmentRequest[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+
+  // Load user's center
+  useEffect(() => {
+    if (isHydrating) return
+    if (!token) {
+      setMyCenter(null)
+      return
+    }
+    getMyCenter(token)
+      .then((c) => setMyCenter(c))
+      .catch(() => setMyCenter(null))
+  }, [token, isHydrating])
+
+  // Load enrollment requests for approved centers
+  useEffect(() => {
+    if (!myCenter || myCenter.status !== "approved" || !token) return
+    setRequestsLoading(true)
+    getMyEnrollmentRequests(token)
+      .then(setEnrollRequests)
+      .catch(() => {})
+      .finally(() => setRequestsLoading(false))
+  }, [myCenter, token])
 
   // During SSR prerendering, profile may be null
   if (!profile) return null
 
-  const userCenter = getUserCenter(profile.id)
-
   const handleLogout = () => {
     logout()
-    showToast("Successfully logged out", "success")
+    showToast("success", "Successfully logged out")
     router.push("/")
   }
 
   const handleOpenEditModal = () => {
-    if (userCenter) {
+    if (myCenter) {
       setEditForm({
-        description: userCenter.description,
-        phone: userCenter.phone,
-        telegram: userCenter.telegram,
-        website: userCenter.website,
-        address: userCenter.address,
-        logo: userCenter.logo,
+        description: myCenter.description || "",
+        phone: myCenter.phone || "",
+        telegram: myCenter.telegram || "",
+        website: myCenter.website || "",
+        address: myCenter.address || "",
+        logo_url: myCenter.logo_url || "",
       })
       setEditModalOpen(true)
     }
   }
 
-  const handleSaveEdit = () => {
-    if (userCenter) {
-      updateCenter(userCenter.id, editForm)
-      showToast("Training center updated successfully", "success")
+  const handleSaveEdit = async () => {
+    if (!token) return
+    setEditSubmitting(true)
+    try {
+      const updated = await updateMyCenter(token, editForm)
+      setMyCenter(updated)
+      showToast("success", "Training center updated successfully")
       setEditModalOpen(false)
+    } catch {
+      showToast("error", "Update failed. Try again.")
+    } finally {
+      setEditSubmitting(false)
     }
   }
+
+  const handleDeleteCenter = async () => {
+    if (!token) return
+    setDeleteSubmitting(true)
+    try {
+      await deleteMyCenter(token)
+      setMyCenter(null)
+      setDeleteModalOpen(false)
+      showToast("success", "Training center deleted successfully")
+    } catch {
+      showToast("error", "Failed to delete. Try again.")
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
+
+  const handleCreateCenter = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!token) return
+    if (!createForm.name || !createForm.description || !createForm.city || !createForm.phone) {
+      showToast("error", "Please fill in required fields")
+      return
+    }
+    setCreateSubmitting(true)
+    try {
+      const created = await registerCenter(token, createForm)
+      setMyCenter(created)
+      setCreateModalOpen(false)
+      setCreateForm({ name: "", description: "", city: "", phone: "", address: "", telegram: "", website: "" })
+      showToast("success", "Training center submitted for approval!")
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Failed to create center"
+      showToast("error", msg)
+    } finally {
+      setCreateSubmitting(false)
+    }
+  }
+
+  const handleApproveRequest = async (requestId: string) => {
+    if (!token) return
+    setActionLoadingId(requestId)
+    try {
+      await approveEnrollment(token, requestId)
+      setEnrollRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: "approved" as const } : r)),
+      )
+      showToast("success", "Student approved!")
+    } catch {
+      showToast("error", "Failed to approve")
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!token) return
+    setActionLoadingId(requestId)
+    try {
+      await rejectEnrollment(token, requestId)
+      setEnrollRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? { ...r, status: "rejected" as const } : r)),
+      )
+      showToast("success", "Request rejected")
+    } catch {
+      showToast("error", "Failed to reject")
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const pendingRequests = enrollRequests.filter((r) => r.status === "pending")
+  const processedRequests = enrollRequests.filter((r) => r.status !== "pending")
 
   // Redirect guests to login (skip in WebApp mode or while hydrating)
   if (!isHydrating && !isLoggedIn && !isWebApp) {
@@ -116,6 +260,7 @@ export default function ProfileSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Training Center */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -125,82 +270,217 @@ export default function ProfileSettingsPage() {
           <CardDescription>Manage your training center registration</CardDescription>
         </CardHeader>
         <CardContent>
-          {userCenter ? (
+          {/* Loading state */}
+          {myCenter === undefined && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+              <Skeleton className="h-9 w-full" />
+            </div>
+          )}
+
+          {/* Has center */}
+          {myCenter !== undefined && myCenter !== null && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">{userCenter.name}</p>
-                  <p className="text-sm text-muted-foreground">{userCenter.city}</p>
+                  <p className="font-medium">{myCenter.name}</p>
+                  {myCenter.city && <p className="text-sm text-muted-foreground">{myCenter.city}</p>}
                 </div>
                 <Badge
                   variant={
-                    userCenter.status === "approved"
+                    myCenter.status === "approved"
                       ? "default"
-                      : userCenter.status === "pending"
+                      : myCenter.status === "pending"
                         ? "secondary"
                         : "destructive"
                   }
                 >
-                  {userCenter.status === "pending" && <Clock className="mr-1 h-3 w-3" />}
-                  {userCenter.status === "approved" && <CheckCircle className="mr-1 h-3 w-3" />}
-                  {userCenter.status === "rejected" && <XCircle className="mr-1 h-3 w-3" />}
-                  {userCenter.status.charAt(0).toUpperCase() + userCenter.status.slice(1)}
+                  {myCenter.status === "pending" && <Clock className="mr-1 h-3 w-3" />}
+                  {myCenter.status === "approved" && <CheckCircle className="mr-1 h-3 w-3" />}
+                  {myCenter.status === "rejected" && <XCircle className="mr-1 h-3 w-3" />}
+                  {myCenter.status === "approved" && myCenter.is_listed
+                    ? "Active"
+                    : myCenter.status === "approved" && !myCenter.is_listed
+                      ? "Unlisted by Admin"
+                      : myCenter.status === "pending"
+                        ? "Under Review"
+                        : "Rejected"}
                 </Badge>
               </div>
 
               {/* Approved status - show view & edit actions */}
-              {userCenter.status === "approved" && (
-                <div className="flex gap-2">
-                  <Link href={`/training-centers/${userCenter.id}`} className="flex-1">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      View Center
-                    </Button>
-                  </Link>
-                  <Button variant="outline" className="flex-1 bg-transparent" onClick={handleOpenEditModal}>
+              {myCenter.status === "approved" && (
+                <div className="flex flex-wrap gap-2">
+                  {myCenter.is_listed && (
+                    <Link href={`/training-centers/${myCenter.id}`} className="flex-1">
+                      <Button variant="outline" className="w-full bg-transparent">
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        View Center
+                      </Button>
+                    </Link>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent"
+                    onClick={handleOpenEditModal}
+                  >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit Center
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                    onClick={() => setDeleteModalOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
                   </Button>
                 </div>
               )}
 
-              {/* Pending status - show message */}
-              {userCenter.status === "pending" && (
+              {/* Pending status */}
+              {myCenter.status === "pending" && (
                 <p className="text-sm text-muted-foreground">
                   Your center is pending admin approval. You will be notified once reviewed.
                 </p>
               )}
 
-              {/* Rejected status - show reason and allow resubmission */}
-              {userCenter.status === "rejected" && (
+              {/* Rejected status */}
+              {myCenter.status === "rejected" && (
                 <div className="space-y-3">
                   <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm">
                     <p className="text-destructive font-medium">Registration Rejected</p>
-                    <p className="text-muted-foreground mt-1">
-                      Your application was not approved. Please review your information and try again.
-                    </p>
+                    {myCenter.rejection_reason ? (
+                      <p className="text-muted-foreground mt-1">{myCenter.rejection_reason}</p>
+                    ) : (
+                      <p className="text-muted-foreground mt-1">
+                        Your application was not approved. Please review your information and try again.
+                      </p>
+                    )}
                   </div>
-                  <Link href="/training-centers/register">
+                  <a href="https://t.me/scorex_support" target="_blank" rel="noopener noreferrer">
                     <Button variant="outline" className="w-full bg-transparent">
-                      Resubmit Application
+                      Contact Support
                     </Button>
-                  </Link>
+                  </a>
                 </div>
               )}
 
-              {/* Unlisted status */}
-              {userCenter.status === "unlisted" && (
-                <p className="text-sm text-muted-foreground">
-                  Your center has been unlisted by admin. Contact support for more information.
-                </p>
+              {/* Enrollment Requests (only for approved centers) */}
+              {myCenter.status === "approved" && (
+                <div className="mt-4 border-t pt-4">
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Enrollment Requests
+                    {pendingRequests.length > 0 && (
+                      <Badge variant="destructive" className="ml-1 text-xs px-1.5 py-0">
+                        {pendingRequests.length}
+                      </Badge>
+                    )}
+                  </h4>
+
+                  {requestsLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : enrollRequests.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No enrollment requests yet.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {/* Pending requests first */}
+                      {pendingRequests.map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg border bg-secondary/30 px-3 py-2 gap-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-7 w-7 flex-shrink-0">
+                              <AvatarFallback className="text-xs">
+                                {req.username.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">@{req.username}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(req.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-7 px-2 text-xs gap-1"
+                              disabled={actionLoadingId === req.id}
+                              onClick={() => handleApproveRequest(req.id)}
+                            >
+                              {actionLoadingId === req.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs gap-1"
+                              disabled={actionLoadingId === req.id}
+                              onClick={() => handleRejectRequest(req.id)}
+                            >
+                              <X className="h-3 w-3" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Processed requests (last 5) */}
+                      {processedRequests.slice(0, 5).map((req) => (
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between rounded-lg px-3 py-2 gap-2 opacity-50"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-7 w-7 flex-shrink-0">
+                              <AvatarFallback className="text-xs">
+                                {req.username.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <p className="text-sm truncate">@{req.username}</p>
+                          </div>
+                          <Badge
+                            variant={req.status === "approved" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {req.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-muted-foreground mb-4">You haven't registered a training center yet.</p>
-              <Link href="/training-centers/register">
-                <Button>{t("training.register")}</Button>
-              </Link>
+          )}
+
+          {/* No center */}
+          {myCenter === null && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                You haven&apos;t registered a training center yet.
+              </p>
+              <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Create Training Center
+              </Button>
             </div>
           )}
         </CardContent>
@@ -252,28 +532,6 @@ export default function ProfileSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Dev/Demo: Role Switcher */}
-      <Card className="mb-6 border-dashed">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Demo: Role Switcher
-          </CardTitle>
-          <CardDescription>For testing purposes only</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Admin Mode</Label>
-              <p className="text-sm text-muted-foreground">
-                Current role: <Badge variant={isAdmin ? "default" : "secondary"}>{currentUserRole}</Badge>
-              </p>
-            </div>
-            <Switch checked={isAdmin} onCheckedChange={(checked) => setRole(checked ? "admin" : "user")} />
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Logout */}
       <Button
         variant="outline"
@@ -284,6 +542,117 @@ export default function ProfileSettingsPage() {
         {t("nav.logout")}
       </Button>
 
+      {/* Create Center Modal */}
+      <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Register Training Center</DialogTitle>
+            <DialogDescription>
+              Submit your center for admin approval. You can only register one center.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateCenter} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="c-name">
+                Center Name <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="c-name"
+                value={createForm.name}
+                onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Your trading center name"
+                required
+                disabled={createSubmitting}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-city">
+                  City <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="c-city"
+                  value={createForm.city}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, city: e.target.value }))}
+                  placeholder="Tashkent"
+                  required
+                  disabled={createSubmitting}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-phone">
+                  Phone <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="c-phone"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="+998 90 123 45 67"
+                  required
+                  disabled={createSubmitting}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-desc">
+                Description <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="c-desc"
+                value={createForm.description}
+                onChange={(e) => setCreateForm((p) => ({ ...p, description: e.target.value }))}
+                rows={3}
+                placeholder="Describe your training center..."
+                required
+                disabled={createSubmitting}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-address">Address</Label>
+              <Input
+                id="c-address"
+                value={createForm.address}
+                onChange={(e) => setCreateForm((p) => ({ ...p, address: e.target.value }))}
+                placeholder="Full address (optional)"
+                disabled={createSubmitting}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-tg">Telegram</Label>
+                <Input
+                  id="c-tg"
+                  value={createForm.telegram}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, telegram: e.target.value }))}
+                  placeholder="@username"
+                  disabled={createSubmitting}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-web">Website</Label>
+                <Input
+                  id="c-web"
+                  value={createForm.website}
+                  onChange={(e) => setCreateForm((p) => ({ ...p, website: e.target.value }))}
+                  placeholder="https://..."
+                  disabled={createSubmitting}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)} disabled={createSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={createSubmitting}>
+                {createSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Submit for Approval
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Center Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -300,6 +669,7 @@ export default function ProfileSettingsPage() {
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                 rows={3}
+                disabled={editSubmitting}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -309,6 +679,7 @@ export default function ProfileSettingsPage() {
                   id="edit-phone"
                   value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  disabled={editSubmitting}
                 />
               </div>
               <div className="space-y-2">
@@ -317,6 +688,7 @@ export default function ProfileSettingsPage() {
                   id="edit-telegram"
                   value={editForm.telegram}
                   onChange={(e) => setEditForm({ ...editForm, telegram: e.target.value })}
+                  disabled={editSubmitting}
                 />
               </div>
             </div>
@@ -326,6 +698,7 @@ export default function ProfileSettingsPage() {
                 id="edit-website"
                 value={editForm.website}
                 onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                disabled={editSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -334,22 +707,64 @@ export default function ProfileSettingsPage() {
                 id="edit-address"
                 value={editForm.address}
                 onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                disabled={editSubmitting}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-logo">Logo URL</Label>
               <Input
                 id="edit-logo"
-                value={editForm.logo}
-                onChange={(e) => setEditForm({ ...editForm, logo: e.target.value })}
+                value={editForm.logo_url}
+                onChange={(e) => setEditForm({ ...editForm, logo_url: e.target.value })}
+                disabled={editSubmitting}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+            <Button variant="outline" onClick={() => setEditModalOpen(false)} disabled={editSubmitting}>
               {t("action.cancel")}
             </Button>
-            <Button onClick={handleSaveEdit}>{t("action.save")}</Button>
+            <Button onClick={handleSaveEdit} disabled={editSubmitting}>
+              {editSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                t("action.save")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Center Confirmation Modal */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Training Center</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{myCenter?.name}</strong>?
+              This action cannot be undone. All enrollments and ratings will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleteSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteCenter}
+              disabled={deleteSubmitting}
+              className="gap-2"
+            >
+              {deleteSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Delete Permanently
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -4,12 +4,13 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Suspense } from "react"
-import { Settings, Edit, Trophy, Star, TrendingUp, Wallet, Award, Heart, Plus, FileText, Loader2 } from "lucide-react"
+import { Settings, Edit, Trophy, Star, TrendingUp, Wallet, Award, Heart, Plus, FileText, Clock, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SignalCard } from "@/components/signals/signal-card"
 import { MySignalCard } from "@/components/profile/my-signal-card"
 import { SubscriptionCard } from "@/components/wallet/subscription-card"
@@ -19,8 +20,9 @@ import { useUser } from "@/lib/user-context"
 import { useWallet } from "@/lib/wallet-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useSearchParams } from "next/navigation"
-import { getMySignals, getTraderByUsername, type ApiSignal, type ApiTrader } from "@/lib/services/signals-service"
+import { getMySignals, type ApiSignal } from "@/lib/services/signals-service"
 import { getMyFavorites } from "@/lib/services/favorites-service"
+import { cn } from "@/lib/utils"
 
 function ProfileContent() {
   const router = useRouter()
@@ -31,22 +33,28 @@ function ProfileContent() {
   const { profile, favorites, isLoggedIn, isHydrating, isWebApp, token } = useUser()
   const { balance } = useWallet()
 
-  // During SSR prerendering, profile may be null
-  if (!profile) return null
-
-  // State for user signals from API
+  // ALL hooks must be called before any conditional returns
   const [userSignals, setUserSignals] = useState<ApiSignal[]>([])
   const [isLoadingSignals, setIsLoadingSignals] = useState(true)
   const [signalsError, setSignalsError] = useState<string | null>(null)
 
-  // State for favorite signals from API
   const [favoriteSignals, setFavoriteSignals] = useState<ApiSignal[]>([])
   const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
   const [favoritesError, setFavoritesError] = useState<string | null>(null)
 
-  // Full profile stats from API
-  const [profileStats, setProfileStats] = useState<ApiTrader | null>(null)
+  const [profileStats, setProfileStats] = useState<{
+    scoreXPoints: number
+    rank: number
+    totalSignals: number
+    successfulSignals: number
+    avgStars: number
+    totalPLPercent: number
+    subscribers: number
+    avgDaysToResult: number
+  } | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+
+  const [signalsSubTab, setSignalsSubTab] = useState<"all" | "live" | "results">("all")
 
   useEffect(() => {
     if (!isHydrating && !isLoggedIn && !isWebApp) {
@@ -57,7 +65,7 @@ function ProfileContent() {
   // Fetch user's signals from API
   useEffect(() => {
     async function fetchUserSignals() {
-      if (!token) {
+      if (!token || !profile) {
         setIsLoadingSignals(false)
         return
       }
@@ -65,7 +73,7 @@ function ProfileContent() {
       try {
         setIsLoadingSignals(true)
         setSignalsError(null)
-        const response = await getMySignals(token)
+        const response = await getMySignals(token, { tab: undefined })
         setUserSignals(response.signals || [])
       } catch (err) {
         setSignalsError(err instanceof Error ? err.message : "Failed to load signals")
@@ -76,34 +84,41 @@ function ProfileContent() {
     }
 
     fetchUserSignals()
-  }, [token])
+  }, [token, profile])
 
-  // Fetch full profile stats from traders API
+  // Fetch full profile stats from /me/stats API
   useEffect(() => {
     async function fetchProfileStats() {
-      if (!token || !profile.username) {
+      if (!token) {
         setIsLoadingProfile(false)
         return
       }
-
       try {
         setIsLoadingProfile(true)
-        const traderData = await getTraderByUsername(profile.username)
-        setProfileStats(traderData)
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/me/stats`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "ngrok-skip-browser-warning": "true",
+            },
+          }
+        )
+        if (!res.ok) throw new Error("Failed")
+        const data = await res.json()
+        setProfileStats(data)
       } catch {
-        // Silently fail - just use default values from context
+        // silently fail — default 0 values used
       } finally {
         setIsLoadingProfile(false)
       }
     }
-
-    if (profile.username) {
+    if (token) {
       fetchProfileStats()
     } else {
-      // No username yet, stop loading
       setIsLoadingProfile(false)
     }
-  }, [token, profile.username])
+  }, [token])
 
   // Fetch favorites when tab is "favorites"
   useEffect(() => {
@@ -114,10 +129,8 @@ function ProfileContent() {
       setFavoritesError(null)
       try {
         const response = await getMyFavorites(token)
-        // Backend returns { signals: [...], total: number }
         setFavoriteSignals(response?.signals || [])
       } catch {
-        // Silently fail - show empty state instead of error
         setFavoriteSignals([])
       } finally {
         setIsLoadingFavorites(false)
@@ -127,7 +140,11 @@ function ProfileContent() {
     fetchFavorites()
   }, [tab, token])
 
-  if (!isLoggedIn) {
+  // Conditional returns AFTER all hooks
+  if (isHydrating) {
+    return <ProfileLoading />
+  }
+  if (!profile || !isLoggedIn) {
     return null
   }
 
@@ -138,9 +155,16 @@ function ProfileContent() {
     avgStars: profileStats?.avgStars ?? profile.avgStars ?? 0,
     totalPLPercent: profileStats?.totalPLPercent ?? profile.totalPLPercent ?? 0,
     totalSignals: profileStats?.totalSignals ?? profile.totalSignals ?? 0,
+    successfulSignals: profileStats?.successfulSignals ?? 0,
     subscribers: profileStats?.subscribers ?? profile.subscribers ?? 0,
     scoreXPoints: profileStats?.scoreXPoints ?? profile.scoreXPoints ?? 0,
+    avgDaysToResult: profileStats?.avgDaysToResult ?? 0,
+    displayName: profileStats?.displayName ?? 'User',
+    telegramUsername: profileStats?.username ?? "username",
   }
+  const winRate = displayProfile.totalSignals > 0
+    ? Math.round((displayProfile.successfulSignals / displayProfile.totalSignals) * 100)
+    : 0
 
   // Favorites count - use loaded data if available, otherwise context
   const favoritesCount = favoriteSignals.length || favorites?.length || 0
@@ -160,21 +184,26 @@ function ProfileContent() {
               </Avatar>
               <div className="text-center sm:text-left">
                 <h1 className="text-2xl font-bold text-primary-foreground">
-                  {displayProfile.displayName || displayProfile.username || "User"}
+                  {displayProfile.displayName}
                 </h1>
                 <p className="text-sm text-primary-foreground/80">
-                  @{displayProfile.telegramUsername || (displayProfile.username || "user").toLowerCase()}
+                  @{displayProfile.telegramUsername}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-sm text-primary-foreground/80 sm:justify-start">
                   {isLoadingProfile ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-4 w-16 rounded" />
+                      <Skeleton className="h-4 w-14 rounded" />
+                      <Skeleton className="h-4 w-10 rounded" />
+                      <Skeleton className="h-4 w-12 rounded" />
+                    </div>
                   ) : (
                     <>
                       <span className="flex items-center gap-1">
                         <Trophy className="h-4 w-4" />
                         {displayProfile.scoreXPoints} pts
                       </span>
-                      <span>Rank #{displayProfile.rank || "—"}</span>
+                      <span>Rank #{displayProfile.rank || "\u2014"}</span>
                       <span className="flex items-center gap-1">
                         <Star className="h-4 w-4 fill-current" />
                         {displayProfile.avgStars.toFixed(1)}
@@ -210,30 +239,60 @@ function ProfileContent() {
           </div>
         </div>
         <CardContent className="p-6">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-3 gap-4">
+            {/* Row 1 */}
             <div className="text-center">
-              <div className="text-2xl font-bold">
-                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : displayProfile.totalSignals}
-              </div>
-              <div className="text-xs text-muted-foreground">Total Signals</div>
+              {isLoadingProfile
+                ? <><Skeleton className="h-7 w-14 mx-auto mb-1" /><Skeleton className="h-3 w-20 mx-auto" /></>
+                : <><div className="text-2xl font-bold">{displayProfile.totalSignals}</div><div className="text-xs text-muted-foreground">Total Signals</div></>
+              }
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-success">
-                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : `+${displayProfile.totalPLPercent}%`}
-              </div>
-              <div className="text-xs text-muted-foreground">Total P/L</div>
+              {isLoadingProfile
+                ? <><Skeleton className="h-7 w-12 mx-auto mb-1" /><Skeleton className="h-3 w-16 mx-auto" /></>
+                : <>
+                    <div className={cn("text-2xl font-bold", winRate >= 50 ? "text-success" : winRate > 0 ? "text-destructive" : "")}>
+                      {displayProfile.totalSignals > 0 ? `${winRate}%` : "\u2014"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Win Rate</div>
+                  </>
+              }
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">
-                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : displayProfile.scoreXPoints}
-              </div>
-              <div className="text-xs text-muted-foreground">ScoreX Points</div>
+              {isLoadingProfile
+                ? <><Skeleton className="h-7 w-16 mx-auto mb-1" /><Skeleton className="h-3 w-16 mx-auto" /></>
+                : <>
+                    <div className={cn("text-2xl font-bold", displayProfile.totalPLPercent >= 0 ? "text-success" : "text-destructive")}>
+                      {displayProfile.totalPLPercent >= 0 ? "+" : ""}{displayProfile.totalPLPercent}%
+                    </div>
+                    <div className="text-xs text-muted-foreground">Total P/L</div>
+                  </>
+              }
+            </div>
+            {/* Row 2 */}
+            <div className="text-center">
+              {isLoadingProfile
+                ? <><Skeleton className="h-7 w-14 mx-auto mb-1" /><Skeleton className="h-3 w-20 mx-auto" /></>
+                : <><div className="text-2xl font-bold">{displayProfile.scoreXPoints}</div><div className="text-xs text-muted-foreground">ScoreX Points</div></>
+              }
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold">
-                {isLoadingProfile ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : displayProfile.subscribers}
-              </div>
-              <div className="text-xs text-muted-foreground">Subscribers</div>
+              {isLoadingProfile
+                ? <><Skeleton className="h-7 w-10 mx-auto mb-1" /><Skeleton className="h-3 w-18 mx-auto" /></>
+                : <><div className="text-2xl font-bold flex items-center justify-center gap-1"><Users className="h-5 w-5 text-muted-foreground" />{displayProfile.subscribers}</div><div className="text-xs text-muted-foreground">Subscribers</div></>
+              }
+            </div>
+            <div className="text-center">
+              {isLoadingProfile
+                ? <><Skeleton className="h-7 w-12 mx-auto mb-1" /><Skeleton className="h-3 w-14 mx-auto" /></>
+                : <>
+                    <div className="text-2xl font-bold flex items-center justify-center gap-1 text-muted-foreground">
+                      <Clock className="h-5 w-5" />
+                      {displayProfile.avgDaysToResult > 0 ? `${displayProfile.avgDaysToResult.toFixed(1)}d` : "\u2014"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Avg Days</div>
+                  </>
+              }
             </div>
           </div>
         </CardContent>
@@ -274,8 +333,8 @@ function ProfileContent() {
                 <Award className="h-5 w-5 text-warning" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold">0</div>
-                <div className="text-xs text-muted-foreground">{t("profile.certificates")}</div>
+                <div className="text-sm font-semibold text-muted-foreground">{"\u2014"}</div>
+                <div className="text-xs text-muted-foreground">Coming Soon</div>
               </div>
             </CardContent>
           </Card>
@@ -315,50 +374,99 @@ function ProfileContent() {
         {/* Desktop: TabsList */}
         <TabsList className="mb-6 hidden w-full grid-cols-4 sm:grid">
           <TabsTrigger value="signals" asChild>
-            <Link href="/profile?tab=signals">
+            <Link href="/profile?tab=signals" className="flex items-center gap-1.5">
               {t("profile.mySignals")}
+              {!isLoadingSignals && userSignals.length > 0 && (
+                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary leading-none">
+                  {userSignals.length}
+                </span>
+              )}
             </Link>
           </TabsTrigger>
           <TabsTrigger value="favorites" asChild>
-            <Link href="/profile?tab=favorites">
+            <Link href="/profile?tab=favorites" className="flex items-center gap-1.5">
               {t("profile.favorites")}
+              {favoritesCount > 0 && (
+                <span className="rounded-full bg-destructive/15 px-1.5 py-0.5 text-xs font-medium text-destructive leading-none">
+                  {favoritesCount}
+                </span>
+              )}
             </Link>
           </TabsTrigger>
           <TabsTrigger value="certificates" asChild>
-            <Link href="/profile?tab=certificates">
-              {t("profile.certificates")}
-            </Link>
+            <Link href="/profile?tab=certificates">{t("profile.certificates")}</Link>
           </TabsTrigger>
           <TabsTrigger value="subscription" asChild>
-            <Link href="/profile?tab=subscription">
-              {t("profile.subscription")}
-            </Link>
+            <Link href="/profile?tab=subscription">{t("profile.subscription")}</Link>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="signals" className="space-y-4">
+        <TabsContent value="signals">
           {isLoadingSignals ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <SkeletonCard key={i} variant="signal" />
-              ))}
-            </div>
+            <div className="space-y-4">{[1,2,3].map(i => <SkeletonCard key={i} variant="signal" />)}</div>
           ) : signalsError ? (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
               <p className="text-sm text-destructive">{signalsError}</p>
-              <Button variant="outline" onClick={() => window.location.reload()}>
-                Try Again
-              </Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>Try Again</Button>
             </div>
-          ) : userSignals.length > 0 ? (
-            userSignals.map((signal) => <MySignalCard key={signal.id} signal={signal as any} />)
           ) : (
-            <EmptyState
-              icon={FileText}
-              title={t("profile.noSignals")}
-              description={t("profile.noSignalsDesc")}
-              action={{ label: t("nav.addSignal"), href: "/signals/add" }}
-            />
+            <>
+              {/* Sub-filter pills */}
+              {userSignals.length > 0 && (
+                <div className="flex gap-2 mb-4">
+                  {(["all", "live", "results"] as const).map(f => {
+                    const count = f === "all"
+                      ? userSignals.length
+                      : f === "live"
+                        ? userSignals.filter(s => ["WAITING_ENTRY","ACTIVE","HOLD"].includes(s.status)).length
+                        : userSignals.filter(s => ["TP1_HIT","TP2_HIT","SL_HIT","CANCEL"].includes(s.status)).length
+                    return (
+                      <button
+                        key={f}
+                        onClick={() => setSignalsSubTab(f)}
+                        className={cn(
+                          "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                          signalsSubTab === f
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        )}
+                      >
+                        {f === "all" ? "All" : f === "live" ? "Live" : "Results"}
+                        <span className="ml-1 opacity-60">({count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Signals list */}
+              {(() => {
+                const filtered = signalsSubTab === "all"
+                  ? userSignals
+                  : signalsSubTab === "live"
+                    ? userSignals.filter(s => ["WAITING_ENTRY","ACTIVE","HOLD"].includes(s.status))
+                    : userSignals.filter(s => ["TP1_HIT","TP2_HIT","SL_HIT","CANCEL"].includes(s.status))
+
+                return filtered.length > 0 ? (
+                  <div className="space-y-4">
+                    {filtered.map(signal => (
+                      <MySignalCard
+                        key={signal.id}
+                        signal={signal as any}
+                        token={token || undefined}
+                        onCancel={(id) => setUserSignals(prev =>
+                          prev.map(s => s.id === id ? { ...s, status: "CANCEL" } : s)
+                        )}
+                      />
+                    ))}
+                  </div>
+                ) : userSignals.length === 0 ? (
+                  <EmptyState icon={FileText} title={t("profile.noSignals")} description={t("profile.noSignalsDesc")} action={{ label: t("nav.addSignal"), href: "/signals/add" }} />
+                ) : (
+                  <EmptyState icon={FileText} title="No signals in this category" description="Switch to 'All' to see all your signals." />
+                )
+              })()}
+            </>
           )}
         </TabsContent>
 

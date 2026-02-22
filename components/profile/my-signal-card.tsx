@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Eye, ShoppingCart, Clock, Ban, ExternalLink } from "lucide-react"
+import { Eye, ShoppingCart, Clock, Ban, ExternalLink, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -36,6 +36,8 @@ interface Signal {
   discountPercent: number
   createdAt: string
   closedAt?: string | null
+  views?: number
+  purchases?: number
 }
 
 function getFinalPrice(signal: Signal): number {
@@ -48,29 +50,59 @@ function getFinalPrice(signal: Signal): number {
 
 interface MySignalCardProps {
   signal: Signal
+  token?: string
   onCancel?: (signalId: string) => void
 }
 
-export function MySignalCard({ signal, onCancel }: MySignalCardProps) {
+export function MySignalCard({ signal, token, onCancel }: MySignalCardProps) {
   const { addNotification } = useWallet()
   const [isCancelled, setIsCancelled] = useState(signal.status === "CANCEL")
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
   const finalPrice = getFinalPrice(signal)
 
-  // Mock stats
-  const views = Math.floor(Math.random() * 500) + 50
-  const purchases = signal.isFree ? 0 : Math.floor(Math.random() * 20)
+  const views = signal.views
+  const purchases = signal.purchases
 
   const canCancel = !isCancelled && !["TP1_HIT", "TP2_HIT", "SL_HIT", "HOLD", "CANCEL"].includes(signal.status)
 
-  const handleCancel = () => {
-    setIsCancelled(true)
-    onCancel?.(signal.id)
-    addNotification({
-      title: "Signal Cancelled",
-      message: `Your ${signal.ticker} signal has been cancelled.`,
-      type: "info",
-      link: `/signals/${signal.id}`,
-    })
+  const handleCancel = async () => {
+    if (!token) {
+      // token yo'q bo'lsa local state update qilib qo'yamiz
+      setIsCancelled(true)
+      onCancel?.(signal.id)
+      return
+    }
+    setIsCancelling(true)
+    setCancelError(null)
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/me/signals/${signal.id}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "ngrok-skip-browser-warning": "true",
+          },
+        }
+      )
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || "Failed to cancel signal")
+      }
+      setIsCancelled(true)
+      onCancel?.(signal.id)
+      addNotification({
+        title: "Signal Cancelled",
+        message: `Your ${signal.ticker} signal has been cancelled.`,
+        type: "info",
+        link: `/signals/${signal.id}`,
+      })
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : "Failed to cancel")
+    } finally {
+      setIsCancelling(false)
+    }
   }
 
   return (
@@ -89,14 +121,14 @@ export function MySignalCard({ signal, onCancel }: MySignalCardProps) {
                 <Clock className="h-3.5 w-3.5" />
                 {formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })}
               </span>
-              <span className="flex items-center gap-1">
-                <Eye className="h-3.5 w-3.5" />
-                {views} views
-              </span>
-              {!signal.isFree && (
+              {views !== undefined && (
                 <span className="flex items-center gap-1">
-                  <ShoppingCart className="h-3.5 w-3.5" />
-                  {purchases} purchases
+                  <Eye className="h-3.5 w-3.5" />{views} views
+                </span>
+              )}
+              {!signal.isFree && purchases !== undefined && (
+                <span className="flex items-center gap-1">
+                  <ShoppingCart className="h-3.5 w-3.5" />{purchases} purchases
                 </span>
               )}
             </div>
@@ -148,13 +180,25 @@ export function MySignalCard({ signal, onCancel }: MySignalCardProps) {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Keep Signal</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleCancel}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Cancel Signal
-                    </AlertDialogAction>
+                    <div className="flex w-full flex-col gap-2">
+                      {cancelError && (
+                        <p className="text-xs text-destructive text-center">{cancelError}</p>
+                      )}
+                      <div className="flex gap-2 justify-end">
+                        <AlertDialogCancel disabled={isCancelling}>Keep Signal</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={(e) => { e.preventDefault(); handleCancel() }}
+                          disabled={isCancelling}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          {isCancelling ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cancelling...</>
+                          ) : (
+                            "Cancel Signal"
+                          )}
+                        </AlertDialogAction>
+                      </div>
+                    </div>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>

@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { useUser } from "@/lib/user-context"
 
 // Types for Training Centers
 export interface TrainingCenter {
@@ -281,12 +282,13 @@ const initialState: AdminState = {
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AdminState>(initialState)
+  const { profile } = useUser()
 
   const setRole = useCallback((role: UserRole) => {
     setState((prev) => ({ ...prev, currentUserRole: role }))
   }, [])
 
-  const isAdmin = state.currentUserRole === "admin"
+  const isAdmin = profile?.role === "admin" || profile?.role === "super_admin"
 
   // Training Center actions
   const registerCenter = useCallback(

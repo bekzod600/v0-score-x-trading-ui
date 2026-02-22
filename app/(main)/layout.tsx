@@ -11,9 +11,9 @@ import { I18nProvider } from "@/lib/i18n-context"
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
-      <AdminProvider>
-        <WalletProvider>
-          <UserProvider>
+      <UserProvider>
+        <AdminProvider>
+          <WalletProvider>
             <ToastProvider>
               <div className="flex min-h-screen flex-col">
                 <Header />
@@ -22,9 +22,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 <BottomNav />
               </div>
             </ToastProvider>
-          </UserProvider>
-        </WalletProvider>
-      </AdminProvider>
+          </WalletProvider>
+        </AdminProvider>
+      </UserProvider>
     </I18nProvider>
   )
 }
