@@ -105,91 +105,116 @@ export function UserProvider({ children }: { children: ReactNode }) {
   
   const hydrateAuth = useCallback(async () => {
     setIsHydrating(true);
-    
+
     try {
       // 1. Telegram WebApp ichida ekanligini tekshirish
       const inWebApp = isRunningInTelegramWebApp();
       setIsWebApp(inWebApp);
-      
+
       if (inWebApp) {
         console.log('[Auth] Running inside Telegram WebApp');
-        
+
         // Avval localStorage da token bormi tekshirish (tezroq)
-        const storedToken = localStorage.getItem('scorex_token');
-        
-        if (storedToken) {
-          console.log('[Auth] WebApp: Found stored token, validating...');
+        const existingToken = localStorage.getItem('scorex_token');
+
+        if (existingToken) {
+          console.log('[Auth] WebApp: Found existing token, validating...');
           try {
-            const user = await getCurrentUser(storedToken);
-            setTokenState(storedToken);
-            setToken(storedToken);
+            const user = await getCurrentUser(existingToken);
+            setTokenState(existingToken);
             setProfile(user);
-            console.log('[Auth] WebApp: Stored token valid, user:', user.id);
+            console.log('[Auth] WebApp: Existing token valid, user:', user.id);
             markWebAppReady();
             expandWebApp();
             return;
-          } catch (err) {
-            console.log('[Auth] WebApp: Stored token invalid, trying initData auth...');
+          } catch (tokenErr) {
+            console.warn('[Auth] WebApp: Existing token invalid, removing...', tokenErr);
             localStorage.removeItem('scorex_token');
+            setTokenState(null);
           }
         }
-        
+
         // Stored token yo'q yoki yaroqsiz — initData bilan auth
         try {
-          const initData = window.Telegram!.WebApp!.initData;
-          
+          const initData = window.Telegram?.WebApp?.initData;
+          console.log('[Auth] WebApp initData exists:', !!initData, 'length:', initData?.length || 0);
+
           if (initData && initData.length > 0) {
+            console.log('[Auth] WebApp: Calling authenticateWebApp...');
             const result = await authenticateWebApp(initData);
-            
-            if (result.success && result.accessToken) {
-              console.log('[Auth] WebApp auth successful');
-              setToken(result.accessToken);
-              
-              const user = await getCurrentUser(result.accessToken);
-              setProfile(user);
-              
+            console.log('[Auth] WebApp: authenticateWebApp result:', JSON.stringify(result));
+
+            if (result && result.success && result.accessToken) {
+              console.log('[Auth] WebApp auth successful, saving token...');
+
+              // Token saqlash — to'g'ridan-to'g'ri localStorage + state
+              localStorage.setItem('scorex_token', result.accessToken);
+              setTokenState(result.accessToken);
+
+              // User ma'lumotlarini olish
+              try {
+                const user = await getCurrentUser(result.accessToken);
+                setProfile(user);
+                console.log('[Auth] WebApp: Profile loaded, user:', user.id);
+              } catch (profileErr) {
+                console.error('[Auth] WebApp: Failed to load profile, using result.user:', profileErr);
+                // Token bor, profile olish xato — result dan fallback
+                setProfile({
+                  id: result.user.id,
+                  telegramId: result.user.telegramId,
+                  telegramUsername: result.user.telegramUsername,
+                  role: result.user.role,
+                } as AuthUser);
+              }
+
               markWebAppReady();
               expandWebApp();
               return;
+            } else {
+              console.warn('[Auth] WebApp: authenticateWebApp returned unexpected result:', result);
             }
+          } else {
+            console.warn('[Auth] WebApp: initData is empty or missing');
           }
-        } catch (webAppError) {
-          console.error('[Auth] WebApp initData auth failed:', webAppError);
+        } catch (webAppError: unknown) {
+          console.error('[Auth] WebApp initData auth failed:', webAppError instanceof Error ? webAppError.message : webAppError);
         }
-        
-        // Hech narsa ishlamadi — ready qilish (auth bo'lmasa ham)
+
+        // Hech narsa ishlamadi
+        console.log('[Auth] WebApp: No auth available, showing as guest');
         markWebAppReady();
         expandWebApp();
-        return;
+        return; // MUHIM: website fallback ga o'tmaslik
       }
-      
+
       // 2. Website: localStorage dan token olish
-      const storedToken = typeof window !== 'undefined' 
-        ? localStorage.getItem('scorex_token') 
+      const storedToken = typeof window !== 'undefined'
+        ? localStorage.getItem('scorex_token')
         : null;
-      
+
       if (storedToken) {
-        console.log('[Auth] Found stored token, validating...');
+        console.log('[Auth] Website: Found stored token, validating...');
         setTokenState(storedToken);
-        
+
         try {
           const user = await getCurrentUser(storedToken);
           setProfile(user);
-          console.log('[Auth] Token validated, user:', user.id);
+          console.log('[Auth] Website: Token validated, user:', user.id);
         } catch (error) {
-          console.error('[Auth] Token validation failed:', error);
-          setToken(null);
+          console.error('[Auth] Website: Token validation failed:', error);
+          localStorage.removeItem('scorex_token');
+          setTokenState(null);
           setProfile(null);
         }
       } else {
-        console.log('[Auth] No stored token found');
+        console.log('[Auth] Website: No stored token found');
       }
     } catch (error) {
-      console.error('[Auth] Hydration error:', error);
+      console.error('[Auth] Hydration critical error:', error);
     } finally {
       setIsHydrating(false);
     }
-  }, [setToken]);
+  }, []);
 
   // ==========================================
   // LOGOUT

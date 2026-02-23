@@ -7,7 +7,7 @@ export interface ApiError {
 }
 
 export interface ApiRequestOptions {
-  method: "GET" | "POST" | "PATCH" | "DELETE"
+  method?: "GET" | "POST" | "PATCH" | "DELETE"
   path: string
   token?: string | null
   body?: unknown
@@ -16,7 +16,7 @@ export interface ApiRequestOptions {
 }
 
 export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
-  const { method, path, token, body, headers: customHeaders, timeoutMs = 15000 } = opts
+  const { method = "GET", path, token, body, headers: customHeaders, timeoutMs = 15000 } = opts
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
   const url = `${BASE_URL}${normalizedPath}`
