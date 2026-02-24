@@ -21,6 +21,8 @@ export async function apiRequest<T>(opts: ApiRequestOptions): Promise<T> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`
   const url = `${BASE_URL}${normalizedPath}`
 
+  if (typeof window !== 'undefined') console.log(`[API] ${method} ${url}`);
+
   const headers: Record<string, string> = {
     Accept: "application/json",
     "ngrok-skip-browser-warning": "true", // Required for ngrok free tier

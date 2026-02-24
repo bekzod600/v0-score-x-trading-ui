@@ -127,13 +127,77 @@ export async function authenticateWebApp(initData: string): Promise<WebAppAuthRe
  */
 export function isRunningInTelegramWebApp(): boolean {
   if (typeof window === 'undefined') return false;
-  
+
   const telegram = window.Telegram;
   if (!telegram?.WebApp) return false;
-  
+
   // initData bo'sh bo'lmasligi kerak
   const initData = telegram.WebApp.initData;
   return typeof initData === 'string' && initData.length > 0;
+}
+
+/**
+ * Telegram WebApp SDK yuklanishini kutish
+ * beforeInteractive har doim kafolatlanmaydi, shuning uchun polling bilan kutamiz
+ *
+ * @param maxWaitMs - maksimal kutish vaqti (default: 3000ms)
+ * @param intervalMs - tekshirish oralig'i (default: 100ms)
+ * @returns true agar WebApp ichida bo'lsak, false agar timeout bo'lsa
+ */
+export async function waitForTelegramWebApp(maxWaitMs: number = 3000, intervalMs: number = 100): Promise<boolean> {
+  // Agar allaqachon mavjud bo'lsa — darhol qaytarish
+  if (isRunningInTelegramWebApp()) {
+    return true;
+  }
+
+  // Server side da hech qachon WebApp emas
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  // URL da tgWebAppData bor-yo'qligini tekshirish (Telegram WebApp har doim bu parametr bilan ochadi)
+  // Bu SDK yuklanmasdan ham aniqlash mumkin
+  const url = window.location.href;
+  const isTelegramContext =
+    url.includes('tgWebAppData') ||
+    url.includes('tgWebAppStartParam') ||
+    // Telegram WebApp iframe ichida ochilganini aniqlash
+    window.parent !== window;
+
+  if (!isTelegramContext) {
+    // URL da hech qanday Telegram parametri yo'q — bu oddiy brauzer
+    return false;
+  }
+
+  // Telegram kontekstida ekanmiz — SDK yuklanishini kutamiz
+  console.log('[Auth] Telegram context detected, waiting for SDK...');
+
+  return new Promise<boolean>((resolve) => {
+    const startTime = Date.now();
+
+    const check = () => {
+      if (isRunningInTelegramWebApp()) {
+        console.log('[Auth] Telegram SDK loaded successfully');
+        resolve(true);
+        return;
+      }
+
+      if (Date.now() - startTime >= maxWaitMs) {
+        console.warn('[Auth] Telegram SDK load timeout after', maxWaitMs, 'ms');
+        // Timeout bo'lsa ham, agar window.Telegram mavjud bo'lsa — true
+        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+        return;
+      }
+
+      setTimeout(check, intervalMs);
+    };
+
+    check();
+  });
 }
 
 /**
