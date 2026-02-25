@@ -19,7 +19,7 @@ function HeaderContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { theme, setTheme } = useTheme()
   const { isAdmin } = useAdmin()
-  const { isLoggedIn } = useUser()
+  const { isLoggedIn, isHydrating } = useUser()
   const { t } = useI18n()
 
   // Check if current page is results tab
@@ -94,7 +94,13 @@ function HeaderContent() {
             <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
             <span className="sr-only">Toggle theme</span>
           </Button>
-          {isLoggedIn ? (
+          {isHydrating ? (
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-muted animate-pulse" />
+              <div className="h-8 w-8 rounded-md bg-muted animate-pulse" />
+              <div className="h-8 w-20 rounded-md bg-muted animate-pulse" />
+            </div>
+          ) : isLoggedIn ? (
             <>
               <NotificationBell />
               <Link href="/wallet">
@@ -181,7 +187,12 @@ function HeaderContent() {
 
             {/* Auth/Profile Actions */}
             <div className="mt-2 flex gap-2 border-t border-border pt-4">
-              {isLoggedIn ? (
+              {isHydrating ? (
+                <div className="flex gap-2 flex-1">
+                  <div className="h-10 flex-1 rounded-md bg-muted animate-pulse" />
+                  <div className="h-10 flex-1 rounded-md bg-muted animate-pulse" />
+                </div>
+              ) : isLoggedIn ? (
                 <>
                   <Link href="/wallet" className="flex-1" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" className="w-full bg-transparent">

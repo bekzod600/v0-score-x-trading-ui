@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/lib/toast-context"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
+import { Skeleton } from "@/components/ui/skeleton"
 import { getMySignals, createSignal, type ApiSignal, type CreateSignalPayload } from "@/lib/services/signals-service"
 
 interface FormErrors {
@@ -89,8 +90,27 @@ export default function AddSignalPage() {
     fetchUserSignals()
   }, [token])
 
-  // During SSR prerendering, profile may be null
-  if (!profile) return null
+  // Hydrating yoki profile yo'q — loading ko'rsatish
+  if (isHydrating || !profile) {
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-6">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <div className="grid grid-cols-2 gap-4">
+                <Skeleton className="h-10" />
+                <Skeleton className="h-10" />
+              </div>
+              <Skeleton className="h-10 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   const freeSignalsCount = userSignals.filter((s) => s.isFree).length
   const scoreXPoints = profile.scoreXPoints

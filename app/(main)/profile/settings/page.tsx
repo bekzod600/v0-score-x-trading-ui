@@ -122,7 +122,33 @@ export default function ProfileSettingsPage() {
       .finally(() => setRequestsLoading(false))
   }, [myCenter, token])
 
-  // During SSR prerendering, profile may be null
+  // During SSR prerendering or hydrating, show skeleton
+  if (isHydrating) {
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-6">
+        <Skeleton className="h-6 w-32 mb-6" />
+        <Skeleton className="h-8 w-48 mb-6" />
+        <Card className="mb-6">
+          <CardHeader>
+            <Skeleton className="h-5 w-24" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-36" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (!profile) return null
 
   const handleLogout = () => {

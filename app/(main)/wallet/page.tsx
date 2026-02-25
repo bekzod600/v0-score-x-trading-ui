@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FormField } from "@/components/ui/form-field"
 import { EmptyState } from "@/components/ui/empty-state"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useUser } from "@/lib/user-context"
 import { useI18n } from "@/lib/i18n-context"
 import { P2PModal } from "@/components/wallet/p2p-modal"
@@ -38,7 +39,7 @@ type PaymentMethod = "click" | "p2p"
 
 export default function WalletPage() {
   const router = useRouter()
-  const { isLoggedIn, token } = useUser()
+  const { isLoggedIn, isHydrating, token } = useUser()
   const { t } = useI18n()
   const [activeTab, setActiveTab] = useState("topup")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("click")
@@ -77,6 +78,29 @@ export default function WalletPage() {
       fetchWalletData()
     }
   }, [isLoggedIn, token])
+
+  if (isHydrating) {
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-8 w-3/4 mx-auto" />
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <Skeleton className="h-20" />
+                <Skeleton className="h-20" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   if (!isLoggedIn) {
     return (

@@ -9,10 +9,16 @@ import { useI18n } from "@/lib/i18n-context"
 
 export function BottomNav() {
   const pathname = usePathname()
-  const { isLoggedIn } = useUser()
+  const { isLoggedIn, isHydrating } = useUser()
   const { t } = useI18n()
 
-  const navItems = isLoggedIn
+  const navItems = isHydrating
+    ? [
+        { href: "/", label: t("nav.home"), icon: Home },
+        { href: "/signals", label: t("nav.signals"), icon: TrendingUp },
+        { href: "/rating", label: t("nav.rating"), icon: Trophy },
+      ]
+    : isLoggedIn
     ? [
         { href: "/", label: t("nav.home"), icon: Home },
         { href: "/signals", label: t("nav.signals"), icon: TrendingUp },
